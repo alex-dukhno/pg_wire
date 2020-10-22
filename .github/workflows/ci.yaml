@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
 
 defaults:
   run:
@@ -26,6 +26,6 @@ jobs:
         with:
           command: tarpaulin
           args: -o Lcov --output-dir ./coverage
-      - uses: coverallsapp/github-action@v1
+      - uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

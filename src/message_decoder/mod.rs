@@ -16,7 +16,7 @@ mod state;
 use crate::{
     message_decoder::state::{Payload, Tag},
     messages::{Cursor, FrontendMessage},
-    ProtocolResult,
+    Result,
 };
 use state::State;
 use std::mem::MaybeUninit;
@@ -55,7 +55,7 @@ impl MessageDecoder {
     }
 
     /// Proceed to the next stage of decoding received message
-    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> ProtocolResult<Status> {
+    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status> {
         let payload = if let Some(payload) = payload { payload } else { &[] };
         let mut state = unsafe { MaybeUninit::zeroed().assume_init() };
         std::mem::swap(&mut state, &mut self.state);

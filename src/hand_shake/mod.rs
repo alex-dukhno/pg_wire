@@ -14,7 +14,7 @@
 
 mod state;
 
-use crate::{ConnId, ConnSecretKey, ProtocolResult};
+use crate::{ConnId, ConnSecretKey, Result};
 use state::{MessageLen, ReadSetupMessage, SetupParsed, State};
 
 /// Encapsulate protocol hand shake process
@@ -29,7 +29,7 @@ impl Process {
     }
 
     /// Proceed to the next stage of client <-> server hand shake
-    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> ProtocolResult<Status> {
+    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status> {
         match self.state.take() {
             None => {
                 self.state = Some(State::new());
