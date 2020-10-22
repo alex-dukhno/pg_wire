@@ -34,7 +34,7 @@ mod messages;
 /// Connection key-value params
 pub type ClientParams = Vec<(String, String)>;
 /// Protocol operation result
-pub type ProtocolResult<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// PostgreSQL OID [Object Identifier](https://www.postgresql.org/docs/current/datatype-oid.html)
 pub(crate) type Oid = u32;
@@ -132,7 +132,7 @@ pub enum PgFormat {
 impl TryFrom<i16> for PgFormat {
     type Error = UnrecognizedFormat;
 
-    fn try_from(value: i16) -> Result<Self, Self::Error> {
+    fn try_from(value: i16) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(PgFormat::Text),
             1 => Ok(PgFormat::Binary),
