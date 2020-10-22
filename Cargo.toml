@@ -1,8 +1,16 @@
 [package]
 name = "pg_wire"
 version = "0.1.0"
+description = "Server Side implementation of PostgreSQL Wire Protocol"
+license-file = "LICENSE"
+repository = "https://github.com/alex-dukhno/pg_wire"
+keywords = ["protocol", "postgresql", "postgres", "database"]
 authors = ["Alex Dukhno <alex.dukhno@icloud.com>"]
 edition = "2018"
+include = [
+    "src/**/*.rs",
+    "Cargo.toml",
+]
 
 [dependencies]
 log = "0.4.11"
