@@ -23,9 +23,9 @@ jobs:
           command: test
           args: --all
       - uses: actions-rs/cargo@v1
-          with:
-            command: tarpaulin
-            args: -o Lcov --output-dir ./coverage
+        with:
+          command: tarpaulin
+          args: -o Lcov --output-dir ./coverage
       - uses: coverallsapp/github-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
