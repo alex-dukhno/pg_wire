@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConnId, ConnSecretKey, Error, Oid, PgFormat, ProtocolResult, UnrecognizedFormat};
+use crate::{ConnId, ConnSecretKey, Error, Oid, PgFormat, Result, UnrecognizedFormat};
 use std::convert::TryFrom;
 
 const COMMAND_COMPLETE: u8 = b'C';
@@ -157,7 +157,7 @@ pub enum FrontendMessage {
 
 impl FrontendMessage {
     /// decodes buffer data to a frontend message
-    pub fn decode(tag: u8, buffer: &[u8]) -> ProtocolResult<Self> {
+    pub fn decode(tag: u8, buffer: &[u8]) -> Result<Self> {
         log::trace!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
 
         let cursor = Cursor::new(buffer);
@@ -414,7 +414,7 @@ impl<'a> Cursor<'a> {
     }
 
     /// Returns the next byte without advancing the cursor.
-    pub fn peek_byte(&self) -> ProtocolResult<u8> {
+    pub fn peek_byte(&self) -> Result<u8> {
         self.buf
             .get(0)
             .copied()
@@ -422,7 +422,7 @@ impl<'a> Cursor<'a> {
     }
 
     /// Returns the next byte, advancing the cursor by one byte.
-    pub(crate) fn read_byte(&mut self) -> ProtocolResult<u8> {
+    pub(crate) fn read_byte(&mut self) -> Result<u8> {
         let byte = self.peek_byte()?;
         self.advance(1);
         Ok(byte)
@@ -431,7 +431,7 @@ impl<'a> Cursor<'a> {
     /// Returns the next null-terminated string. The null character is not
     /// included the returned string. The cursor is advanced past the null-
     /// terminated string.
-    pub fn read_cstr(&mut self) -> ProtocolResult<&'a str> {
+    pub fn read_cstr(&mut self) -> Result<&'a str> {
         if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
             let val = std::str::from_utf8(&self.buf[..pos]).map_err(|_e| Error::InvalidUtfString)?;
             self.advance(pos + 1);
@@ -443,7 +443,7 @@ impl<'a> Cursor<'a> {
 
     /// Reads the next 16-bit signed integer, advancing the cursor by two
     /// bytes.
-    fn read_i16(&mut self) -> ProtocolResult<i16> {
+    fn read_i16(&mut self) -> Result<i16> {
         if self.buf.len() < 2 {
             return Err(Error::InvalidInput("not enough buffer to read 16bit Int".to_owned()));
         }
@@ -454,7 +454,7 @@ impl<'a> Cursor<'a> {
 
     /// Reads the next 32-bit signed integer, advancing the cursor by four
     /// bytes.
-    pub fn read_i32(&mut self) -> ProtocolResult<i32> {
+    pub fn read_i32(&mut self) -> Result<i32> {
         if self.buf.len() < 4 {
             return Err(Error::InvalidInput("not enough buffer to read 32bit Int".to_owned()));
         }
@@ -465,12 +465,12 @@ impl<'a> Cursor<'a> {
 
     /// Reads the next 32-bit unsigned integer, advancing the cursor by four
     /// bytes.
-    fn read_u32(&mut self) -> ProtocolResult<u32> {
+    fn read_u32(&mut self) -> Result<u32> {
         self.read_i32().map(|val| val as u32)
     }
 }
 
-fn decode_bind(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage> {
     let portal_name = cursor.read_cstr()?.to_owned();
     let statement_name = cursor.read_cstr()?.to_owned();
 
@@ -514,7 +514,7 @@ fn decode_bind(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
     })
 }
 
-fn decode_close(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage> {
     let first_char = cursor.read_byte()?;
     let name = cursor.read_cstr()?.to_owned();
     match first_char {
@@ -527,7 +527,7 @@ fn decode_close(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
     }
 }
 
-fn decode_describe(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_describe(mut cursor: Cursor) -> Result<FrontendMessage> {
     let first_char = cursor.read_byte()?;
     let name = cursor.read_cstr()?.to_owned();
     match first_char {
@@ -540,17 +540,17 @@ fn decode_describe(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
     }
 }
 
-fn decode_execute(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_execute(mut cursor: Cursor) -> Result<FrontendMessage> {
     let portal_name = cursor.read_cstr()?.to_owned();
     let max_rows = cursor.read_i32()?;
     Ok(FrontendMessage::Execute { portal_name, max_rows })
 }
 
-fn decode_flush(_cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_flush(_cursor: Cursor) -> Result<FrontendMessage> {
     Ok(FrontendMessage::Flush)
 }
 
-fn decode_parse(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage> {
     let statement_name = cursor.read_cstr()?.to_owned();
     let sql = cursor.read_cstr()?.to_owned();
 
@@ -568,16 +568,16 @@ fn decode_parse(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
     })
 }
 
-fn decode_sync(_cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_sync(_cursor: Cursor) -> Result<FrontendMessage> {
     Ok(FrontendMessage::Sync)
 }
 
-fn decode_query(mut cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_query(mut cursor: Cursor) -> Result<FrontendMessage> {
     let sql = cursor.read_cstr()?.to_owned();
     Ok(FrontendMessage::Query { sql })
 }
 
-fn decode_terminate(_cursor: Cursor) -> ProtocolResult<FrontendMessage> {
+fn decode_terminate(_cursor: Cursor) -> Result<FrontendMessage> {
     Ok(FrontendMessage::Terminate)
 }
 
