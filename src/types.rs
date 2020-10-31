@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::{self, Display, Formatter};
-use std::convert::TryFrom;
-use crate::{Oid, PgFormat};
-use crate::cursor::Cursor;
+use crate::{cursor::Cursor, Oid, PgFormat};
+use std::{
+    convert::TryFrom,
+    fmt::{self, Display, Formatter},
+};
 
 /// Represents PostgreSQL data type and methods to send over wire
 #[derive(Debug, PartialEq)]
@@ -368,18 +369,12 @@ mod tests {
 
         #[test]
         fn decode_true() {
-            assert_eq!(
-                PgType::Bool.decode(&PgFormat::Binary, &[1]),
-                Ok(Value::True)
-            );
+            assert_eq!(PgType::Bool.decode(&PgFormat::Binary, &[1]), Ok(Value::True));
         }
 
         #[test]
         fn decode_false() {
-            assert_eq!(
-                PgType::Bool.decode(&PgFormat::Binary, &[0]),
-                Ok(Value::False)
-            );
+            assert_eq!(PgType::Bool.decode(&PgFormat::Binary, &[0]), Ok(Value::False));
         }
 
         #[test]
@@ -437,18 +432,12 @@ mod tests {
 
         #[test]
         fn decode_true() {
-            assert_eq!(
-                PgType::Bool.decode(&PgFormat::Text, b"true"),
-                Ok(Value::True)
-            );
+            assert_eq!(PgType::Bool.decode(&PgFormat::Text, b"true"), Ok(Value::True));
         }
 
         #[test]
         fn decode_false() {
-            assert_eq!(
-                PgType::Bool.decode(&PgFormat::Text, b"0"),
-                Ok(Value::False)
-            );
+            assert_eq!(PgType::Bool.decode(&PgFormat::Text, b"0"), Ok(Value::False));
         }
 
         #[test]
@@ -469,18 +458,12 @@ mod tests {
 
         #[test]
         fn decode_smallint() {
-            assert_eq!(
-                PgType::SmallInt.decode(&PgFormat::Text, b"1"),
-                Ok(Value::Int16(1))
-            );
+            assert_eq!(PgType::SmallInt.decode(&PgFormat::Text, b"1"), Ok(Value::Int16(1)));
         }
 
         #[test]
         fn decode_integer() {
-            assert_eq!(
-                PgType::Integer.decode(&PgFormat::Text, b"123"),
-                Ok(Value::Int32(123))
-            );
+            assert_eq!(PgType::Integer.decode(&PgFormat::Text, b"123"), Ok(Value::Int32(123)));
         }
 
         #[test]

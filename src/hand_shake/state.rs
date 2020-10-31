@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use crate::{
-    cursor::Cursor, ConnId, ConnSecretKey, Error, Result,
-    request_codes::{CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, Code, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE}
+    cursor::Cursor,
+    request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
+    ConnId, ConnSecretKey, Error, Result,
 };
 
 trait ConnectionTransition<C> {

@@ -5,7 +5,6 @@ on:
     branches: [ main ]
 
 env:
-  RUSTFLAGS: -Dwarnings
   RUST_BACKTRACE: 1
 
 defaults:
@@ -39,7 +38,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --all-features -- -D warnings
+          args: --all-targets --all-features
 
   tests:
     needs:

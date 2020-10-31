@@ -15,23 +15,20 @@
 #![warn(missing_docs)]
 //! API for backend implementation of PostgreSQL Wire Protocol
 
-use std::{
-    convert::TryFrom,
-    fmt::Debug,
-};
+use std::{convert::TryFrom, fmt::Debug};
 
 pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
 
+mod cursor;
 mod hand_shake;
 mod message_decoder;
 /// Module contains backend messages that could be send by server implementation
 /// to a client
 mod messages;
-mod types;
 mod request_codes;
-mod cursor;
+mod types;
 
 /// Connection key-value params
 pub type ClientParams = Vec<(String, String)>;

@@ -15,7 +15,7 @@
 use crate::{
     cursor::Cursor,
     message_decoder::state::{Payload, Tag},
-    messages::{FrontendMessage},
+    messages::FrontendMessage,
     Result,
 };
 use state::State;

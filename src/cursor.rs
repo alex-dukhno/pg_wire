@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Result, Error};
+use crate::{Error, Result};
 
 /// Cursor over `u8` slice to decode it into primitive types from big endian format
 #[derive(Debug)]
@@ -103,7 +103,16 @@ impl<'a> Cursor<'a> {
         if self.buf.len() < 8 {
             return Err(Error::InvalidInput("not enough buffer to read 64bit Int".to_owned()));
         }
-        let val = i64::from_be_bytes([self.buf[0], self.buf[1], self.buf[2], self.buf[3], self.buf[4], self.buf[5], self.buf[6], self.buf[7]]);
+        let val = i64::from_be_bytes([
+            self.buf[0],
+            self.buf[1],
+            self.buf[2],
+            self.buf[3],
+            self.buf[4],
+            self.buf[5],
+            self.buf[6],
+            self.buf[7],
+        ]);
         self.advance(8);
         Ok(val)
     }
@@ -124,14 +133,17 @@ mod tests {
     fn error_read_byte() {
         let buffer = vec![];
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_byte(), Err(Error::InvalidInput("No byte to read".to_owned())));
+        assert_eq!(
+            cursor.read_byte(),
+            Err(Error::InvalidInput("No byte to read".to_owned()))
+        );
     }
 
     #[test]
     fn ok_read_cstr() {
         let buffer = b"some string\0".to_vec();
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_cstr(), Ok("some string".into()));
+        assert_eq!(cursor.read_cstr(), Ok("some string"));
     }
 
     #[test]
@@ -178,7 +190,10 @@ mod tests {
     fn error_read_i16() {
         let buffer = 123i8.to_be_bytes().to_vec();
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_i16(), Err(Error::InvalidInput("not enough buffer to read 16bit Int".into())));
+        assert_eq!(
+            cursor.read_i16(),
+            Err(Error::InvalidInput("not enough buffer to read 16bit Int".into()))
+        );
     }
 
     #[test]
@@ -192,7 +207,10 @@ mod tests {
     fn error_read_i32() {
         let buffer = 123i16.to_be_bytes().to_vec();
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_i32(), Err(Error::InvalidInput("not enough buffer to read 32bit Int".into())));
+        assert_eq!(
+            cursor.read_i32(),
+            Err(Error::InvalidInput("not enough buffer to read 32bit Int".into()))
+        );
     }
 
     #[test]
@@ -206,7 +224,10 @@ mod tests {
     fn error_read_u32() {
         let buffer = 123i16.to_be_bytes().to_vec();
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_u32(), Err(Error::InvalidInput("not enough buffer to read 32bit Int".into())));
+        assert_eq!(
+            cursor.read_u32(),
+            Err(Error::InvalidInput("not enough buffer to read 32bit Int".into()))
+        );
     }
 
     #[test]
@@ -220,6 +241,9 @@ mod tests {
     fn error_read_i64() {
         let buffer = 123i16.to_be_bytes().to_vec();
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_i64(), Err(Error::InvalidInput("not enough buffer to read 64bit Int".into())));
+        assert_eq!(
+            cursor.read_i64(),
+            Err(Error::InvalidInput("not enough buffer to read 64bit Int".into()))
+        );
     }
 }

@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConnId, ConnSecretKey, Error, Oid, PgFormat, Result, UnrecognizedFormat};
+use crate::{cursor::Cursor, ConnId, ConnSecretKey, Error, Oid, PgFormat, Result, UnrecognizedFormat};
 use std::convert::TryFrom;
-use crate::cursor::Cursor;
 
 const COMMAND_COMPLETE: u8 = b'C';
 const DATA_ROW: u8 = b'D';
