@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{messages::Cursor, Result};
+use crate::{cursor::Cursor, Result};
 
 trait Transform<C> {
     fn transform(self, buf: &mut Cursor) -> Result<C>;

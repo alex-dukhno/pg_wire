@@ -14,6 +14,7 @@
 
 use crate::{ConnId, ConnSecretKey, Error, Oid, PgFormat, Result, UnrecognizedFormat};
 use std::convert::TryFrom;
+use crate::cursor::Cursor;
 
 const COMMAND_COMPLETE: u8 = b'C';
 const DATA_ROW: u8 = b'D';
@@ -45,7 +46,8 @@ const SYNC: u8 = b'S';
 const TERMINATE: u8 = b'X';
 
 /// Frontend PostgreSQL Wire Protocol messages
-/// see https://www.postgresql.org/docs/12/protocol-flow.html
+/// see [Protocol Flow](https://www.postgresql.org/docs/current/protocol-flow.html)
+/// PostgreSQL documentation section
 #[derive(Debug, PartialEq)]
 pub enum FrontendMessage {
     /// Client requested GSSENC Request
@@ -160,7 +162,7 @@ impl FrontendMessage {
     pub fn decode(tag: u8, buffer: &[u8]) -> Result<Self> {
         log::trace!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
 
-        let cursor = Cursor::new(buffer);
+        let cursor = Cursor::from(buffer);
         match tag {
             // Simple query flow.
             QUERY => decode_query(cursor),
@@ -380,93 +382,6 @@ impl ColumnMetadata {
             type_id,
             type_size,
         }
-    }
-}
-
-/// Decodes data within messages.
-#[derive(Debug)]
-pub struct Cursor<'a> {
-    buf: &'a [u8],
-}
-
-impl<'c> From<&'c [u8]> for Cursor<'c> {
-    fn from(buf: &'c [u8]) -> Self {
-        Cursor { buf }
-    }
-}
-
-impl<'c> From<&'c Cursor<'c>> for Vec<u8> {
-    fn from(cur: &'c Cursor<'c>) -> Vec<u8> {
-        cur.buf.to_vec()
-    }
-}
-
-impl<'a> Cursor<'a> {
-    /// Constructs a new `Cursor` from a byte slice. The cursor will begin
-    /// decoding from the beginning of the slice.
-    fn new(buf: &'a [u8]) -> Cursor {
-        Cursor { buf }
-    }
-
-    /// Advances the cursor by `n` bytes.
-    fn advance(&mut self, n: usize) {
-        self.buf = &self.buf[n..]
-    }
-
-    /// Returns the next byte without advancing the cursor.
-    pub fn peek_byte(&self) -> Result<u8> {
-        self.buf
-            .get(0)
-            .copied()
-            .ok_or_else(|| Error::InvalidInput("No byte to read".to_owned()))
-    }
-
-    /// Returns the next byte, advancing the cursor by one byte.
-    pub(crate) fn read_byte(&mut self) -> Result<u8> {
-        let byte = self.peek_byte()?;
-        self.advance(1);
-        Ok(byte)
-    }
-
-    /// Returns the next null-terminated string. The null character is not
-    /// included the returned string. The cursor is advanced past the null-
-    /// terminated string.
-    pub fn read_cstr(&mut self) -> Result<&'a str> {
-        if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
-            let val = std::str::from_utf8(&self.buf[..pos]).map_err(|_e| Error::InvalidUtfString)?;
-            self.advance(pos + 1);
-            Ok(val)
-        } else {
-            Err(Error::ZeroByteNotFound)
-        }
-    }
-
-    /// Reads the next 16-bit signed integer, advancing the cursor by two
-    /// bytes.
-    fn read_i16(&mut self) -> Result<i16> {
-        if self.buf.len() < 2 {
-            return Err(Error::InvalidInput("not enough buffer to read 16bit Int".to_owned()));
-        }
-        let val = i16::from_be_bytes([self.buf[0], self.buf[1]]);
-        self.advance(2);
-        Ok(val)
-    }
-
-    /// Reads the next 32-bit signed integer, advancing the cursor by four
-    /// bytes.
-    pub fn read_i32(&mut self) -> Result<i32> {
-        if self.buf.len() < 4 {
-            return Err(Error::InvalidInput("not enough buffer to read 32bit Int".to_owned()));
-        }
-        let val = i32::from_be_bytes([self.buf[0], self.buf[1], self.buf[2], self.buf[3]]);
-        self.advance(4);
-        Ok(val)
-    }
-
-    /// Reads the next 32-bit unsigned integer, advancing the cursor by four
-    /// bytes.
-    fn read_u32(&mut self) -> Result<u32> {
-        self.read_i32().map(|val| val as u32)
     }
 }
 

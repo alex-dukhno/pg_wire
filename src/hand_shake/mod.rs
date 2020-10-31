@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod state;
-
 use crate::{ConnId, ConnSecretKey, Result};
 use state::{MessageLen, ReadSetupMessage, SetupParsed, State};
+
+mod state;
 
 /// Encapsulate protocol hand shake process
 pub struct Process {
@@ -81,7 +81,7 @@ pub enum Request {
 #[cfg(test)]
 mod perform_hand_shake_loop {
     use super::*;
-    use crate::{CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_3_CODE};
+    use crate::request_codes::{CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_3_CODE};
 
     #[test]
     fn init_hand_shake_process() {
