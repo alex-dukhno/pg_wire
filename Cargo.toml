@@ -2,7 +2,7 @@
 name = "pg_wire"
 version = "0.1.0"
 description = "Server Side implementation of PostgreSQL Wire Protocol"
-license-file = "LICENSE"
+license = "Apache-2.0"
 repository = "https://github.com/alex-dukhno/pg_wire"
 keywords = ["protocol", "postgresql", "postgres", "database"]
 authors = ["Alex Dukhno <alex.dukhno@icloud.com>", "Steven <asongala@163.com>"]

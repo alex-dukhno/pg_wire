@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod state;
 use crate::{
+    cursor::Cursor,
     message_decoder::state::{Payload, Tag},
-    messages::{Cursor, FrontendMessage},
+    messages::FrontendMessage,
     Result,
 };
 use state::State;
 use std::mem::MaybeUninit;
+
+mod state;
 
 /// Represents a status of a `MessageDecoder` stage
 #[derive(Debug, PartialEq)]

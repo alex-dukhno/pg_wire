@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use crate::{
-    messages::Cursor, Code, ConnId, ConnSecretKey, Error, Result, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE,
-    VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE,
+    cursor::Cursor,
+    request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
+    ConnId, ConnSecretKey, Error, Result,
 };
 
 trait ConnectionTransition<C> {
@@ -99,7 +100,7 @@ impl State {
 #[cfg(test)]
 mod connection_state_machine {
     use super::*;
-    use crate::GSSENC_REQUEST_CODE;
+    use crate::request_codes::GSSENC_REQUEST_CODE;
 
     #[test]
     fn created_state() {
