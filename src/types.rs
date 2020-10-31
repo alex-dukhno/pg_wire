@@ -38,7 +38,7 @@ pub enum PgType {
 }
 
 impl PgType {
-    /// Returns PostgreSQL type [Oid]
+    /// Returns PostgreSQL type [Oid](Oid)
     pub fn type_oid(&self) -> Oid {
         match self {
             PgType::Bool => 16,
