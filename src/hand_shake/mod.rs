@@ -20,7 +20,8 @@ mod state;
 /// Encapsulate protocol hand shake process
 ///
 /// # Examples
-/// ```
+///
+/// ```ignore
 /// use pg_wire::{HandShakeProcess, HandShakeStatus, HandShakeRequest};
 ///
 /// let mut stream = accept_tcp_connection();
@@ -37,7 +38,7 @@ mod state;
 ///             stream = tls_stream(stream);
 ///         }
 ///         Ok(HandShakeStatus::Cancel(conn_id, secret_key)) => {
-///             handle_request_cancelation(conn_id, secret_key);
+///             handle_request_cancellation(conn_id, secret_key);
 ///             break;
 ///         }
 ///         Ok(HandShakeStatus::Done(props)) => {
