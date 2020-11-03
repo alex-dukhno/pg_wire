@@ -18,6 +18,39 @@ use state::{MessageLen, ReadSetupMessage, SetupParsed, State};
 mod state;
 
 /// Encapsulate protocol hand shake process
+///
+/// # Examples
+/// ```
+/// use pg_wire::{HandShakeProcess, HandShakeStatus, HandShakeRequest};
+///
+/// let mut stream = accept_tcp_connection();
+/// let mut process = HandShakeProcess::start();
+/// let mut buffer: Option<Vec<u8>> = None;
+/// loop {
+///     match process.next_stage(buffer.as_deref()) {
+///         Ok(HandShakeStatus::Requesting(HandShakeRequest::Buffer(len))) => {
+///             let mut buf = vec![b'0'; len];
+///             buffer = Some(stream.read(&mut buf));
+///         }
+///         Ok(HandShakeStatus::Requesting(HandShakeRequest::UpgradeToSsl)) => {
+///             stream.write_all(&[b'S']); // accepting tls connection from client
+///             stream = tls_stream(stream);
+///         }
+///         Ok(HandShakeStatus::Cancel(conn_id, secret_key)) => {
+///             handle_request_cancelation(conn_id, secret_key);
+///             break;
+///         }
+///         Ok(HandShakeStatus::Done(props)) => {
+///             handle_authentication_and_other_stuff();
+///             break;
+///         }
+///         Err(protocol_error) => {
+///             handle_protocol_error(protocol_error);
+///             break;
+///         }
+///     }
+/// }
+/// ```
 pub struct Process {
     state: Option<State>,
 }
