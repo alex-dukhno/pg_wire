@@ -15,8 +15,6 @@
 #![warn(missing_docs)]
 //! API for backend implementation of PostgreSQL Wire Protocol
 
-use std::{convert::TryFrom, fmt::Debug};
-
 pub use format::{PgFormat, UnrecognizedFormat};
 pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
