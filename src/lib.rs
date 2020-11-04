@@ -20,6 +20,7 @@ pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, S
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
 pub use result::{Error, Result};
+pub use types::{NotSupportedOid, PgType, Value};
 
 mod cursor;
 mod format;
@@ -38,6 +39,6 @@ pub type ClientParams = Vec<(String, String)>;
 /// PostgreSQL OID [Object Identifier](https://www.postgresql.org/docs/current/datatype-oid.html)
 pub type Oid = u32;
 /// Connection ID
-pub(crate) type ConnId = i32;
+pub type ConnId = i32;
 /// Connection secret key
-pub(crate) type ConnSecretKey = i32;
+pub type ConnSecretKey = i32;
