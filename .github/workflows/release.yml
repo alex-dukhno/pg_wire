@@ -9,7 +9,6 @@ defaults:
     shell: bash
 
 env:
-  RUSTFLAGS: -Dwarnings
   RUST_BACKTRACE: 1
 
 jobs:
