@@ -187,7 +187,7 @@ impl FrontendMessage {
 }
 
 /// Backend PostgreSQL Wire Protocol messages
-/// see https://www.postgresql.org/docs/12/protocol-flow.html
+/// see [Protocol Flow](https://www.postgresql.org/docs/current/protocol-flow.html)
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum BackendMessage {
