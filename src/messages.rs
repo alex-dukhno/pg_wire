@@ -375,11 +375,11 @@ pub struct ColumnMetadata {
 
 impl ColumnMetadata {
     /// Creates new column metadata
-    pub fn new<S: ToString>(name: S, type_id: u32, type_size: i16) -> ColumnMetadata {
+    pub fn new<S: ToString>(name: S, pg_type: PgType) -> ColumnMetadata {
         Self {
             name: name.to_string(),
-            type_id,
-            type_size,
+            type_id: pg_type.type_oid(),
+            type_size: pg_type.type_len(),
         }
     }
 }
@@ -726,7 +726,7 @@ mod serializing_backend_messages {
     #[test]
     fn row_description() {
         assert_eq!(
-            BackendMessage::RowDescription(vec![ColumnMetadata::new("c1".to_owned(), 23, 4)]).as_vec(),
+            BackendMessage::RowDescription(vec![ColumnMetadata::new("c1".to_owned(), PgType::Integer)]).as_vec(),
             vec![
                 ROW_DESCRIPTION,
                 0,
