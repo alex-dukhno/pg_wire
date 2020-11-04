@@ -39,6 +39,6 @@ pub type ClientParams = Vec<(String, String)>;
 /// PostgreSQL OID [Object Identifier](https://www.postgresql.org/docs/current/datatype-oid.html)
 pub type Oid = u32;
 /// Connection ID
-pub(crate) type ConnId = i32;
+pub type ConnId = i32;
 /// Connection secret key
-pub(crate) type ConnSecretKey = i32;
+pub type ConnSecretKey = i32;
