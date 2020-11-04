@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cursor::Cursor, ConnId, ConnSecretKey, Error, Oid, PgFormat, Result, UnrecognizedFormat};
+use crate::{cursor::Cursor, types::PgType, ConnId, ConnSecretKey, Error, PgFormat, Result, UnrecognizedFormat};
 use std::convert::TryFrom;
 
 const COMMAND_COMPLETE: u8 = b'C';
@@ -235,7 +235,7 @@ pub enum BackendMessage {
     /// 3rd and 4th paragraph
     ParameterStatus(String, String),
     /// Indicates that parameters are needed by a prepared statement.
-    ParameterDescription(Vec<Oid>),
+    ParameterDescription(Vec<PgType>),
     /// Indicates that the statement will not return rows.
     NoData,
     /// This message informs the frontend about the previous `Parse` frontend
@@ -341,15 +341,15 @@ impl BackendMessage {
                 parameter_status_buff.extend_from_slice(parameters.as_ref());
                 parameter_status_buff
             }
-            BackendMessage::ParameterDescription(type_ids) => {
+            BackendMessage::ParameterDescription(pg_types) => {
                 let mut type_id_buff = Vec::new();
-                for type_id in type_ids.iter() {
-                    type_id_buff.extend_from_slice(&type_id.to_be_bytes());
+                for pg_type in pg_types.iter() {
+                    type_id_buff.extend_from_slice(&pg_type.type_oid().to_be_bytes());
                 }
                 let mut buff = Vec::new();
                 buff.extend_from_slice(&[PARAMETER_DESCRIPTION]);
                 buff.extend_from_slice(&(6 + type_id_buff.len() as i32).to_be_bytes());
-                buff.extend_from_slice(&(type_ids.len() as i16).to_be_bytes());
+                buff.extend_from_slice(&(pg_types.len() as i16).to_be_bytes());
                 buff.extend_from_slice(&type_id_buff);
                 buff
             }
@@ -787,7 +787,7 @@ mod serializing_backend_messages {
     #[test]
     fn parameter_description() {
         assert_eq!(
-            BackendMessage::ParameterDescription(vec![23]).as_vec(),
+            BackendMessage::ParameterDescription(vec![PgType::Integer]).as_vec(),
             vec![PARAMETER_DESCRIPTION, 0, 0, 0, 10, 0, 1, 0, 0, 0, 23]
         )
     }
