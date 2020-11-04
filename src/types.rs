@@ -19,7 +19,7 @@ use std::{
 };
 
 /// Represents PostgreSQL data type and methods to send over wire
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PgType {
     /// Represents PostgreSQL `smallint` data type
     SmallInt,
