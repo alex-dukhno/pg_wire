@@ -77,7 +77,7 @@ pub enum FrontendMessage {
         sql: String,
         /// The number of specified parameter data types can be less than the
         /// number of parameters specified in the query.
-        param_types: Vec<u32>,
+        param_types: Vec<PgType>,
     },
 
     /// Describe an existing prepared statement.
@@ -375,11 +375,11 @@ pub struct ColumnMetadata {
 
 impl ColumnMetadata {
     /// Creates new column metadata
-    pub fn new<S: ToString>(name: S, type_id: u32, type_size: i16) -> ColumnMetadata {
+    pub fn new<S: ToString>(name: S, pg_type: PgType) -> ColumnMetadata {
         Self {
             name: name.to_string(),
-            type_id,
-            type_size,
+            type_id: pg_type.type_oid(),
+            type_size: pg_type.type_len(),
         }
     }
 }
@@ -470,7 +470,7 @@ fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage> {
 
     let mut param_types = vec![];
     for _ in 0..cursor.read_i16()? {
-        let oid = cursor.read_u32()?;
+        let oid = PgType::try_from(cursor.read_u32()?)?;
         log::trace!("OID {:?}", oid);
         param_types.push(oid);
     }
@@ -613,7 +613,7 @@ mod decoding_frontend_messages {
             Ok(FrontendMessage::Parse {
                 statement_name: "".to_owned(),
                 sql: "select * from schema_name.table_name where si_column = $1;".to_owned(),
-                param_types: vec![23],
+                param_types: vec![PgType::Integer],
             })
         );
     }
@@ -726,7 +726,7 @@ mod serializing_backend_messages {
     #[test]
     fn row_description() {
         assert_eq!(
-            BackendMessage::RowDescription(vec![ColumnMetadata::new("c1".to_owned(), 23, 4)]).as_vec(),
+            BackendMessage::RowDescription(vec![ColumnMetadata::new("c1".to_owned(), PgType::Integer)]).as_vec(),
             vec![
                 ROW_DESCRIPTION,
                 0,

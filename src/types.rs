@@ -19,7 +19,7 @@ use std::{
 };
 
 /// Represents PostgreSQL data type and methods to send over wire
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PgType {
     /// Represents PostgreSQL `smallint` data type
     SmallInt,
@@ -129,6 +129,12 @@ impl TryFrom<Oid> for PgType {
             1043 => Ok(PgType::VarChar),
             _ => Err(NotSupportedOid(oid)),
         }
+    }
+}
+
+impl Display for NotSupportedOid {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} OID is not supported", self.0)
     }
 }
 

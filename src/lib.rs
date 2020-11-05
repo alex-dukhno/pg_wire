@@ -20,7 +20,7 @@ pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, S
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
 pub use result::{Error, Result};
-pub use types::{NotSupportedOid, PgType, Value};
+pub use types::{PgType, Value};
 
 mod cursor;
 mod format;
