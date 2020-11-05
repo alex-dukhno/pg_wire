@@ -77,7 +77,7 @@ pub enum FrontendMessage {
         sql: String,
         /// The number of specified parameter data types can be less than the
         /// number of parameters specified in the query.
-        param_types: Vec<u32>,
+        param_types: Vec<PgType>,
     },
 
     /// Describe an existing prepared statement.
@@ -470,7 +470,7 @@ fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage> {
 
     let mut param_types = vec![];
     for _ in 0..cursor.read_i16()? {
-        let oid = cursor.read_u32()?;
+        let oid = PgType::try_from(cursor.read_u32()?)?;
         log::trace!("OID {:?}", oid);
         param_types.push(oid);
     }
@@ -613,7 +613,7 @@ mod decoding_frontend_messages {
             Ok(FrontendMessage::Parse {
                 statement_name: "".to_owned(),
                 sql: "select * from schema_name.table_name where si_column = $1;".to_owned(),
-                param_types: vec![23],
+                param_types: vec![PgType::Integer],
             })
         );
     }

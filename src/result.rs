@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::types::NotSupportedOid;
+
 /// Protocol operation result
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -36,4 +38,10 @@ pub enum Error {
     UnrecognizedVersion,
     /// Indicates that connection verification is failed
     VerificationFailed,
+}
+
+impl From<NotSupportedOid> for Error {
+    fn from(error: NotSupportedOid) -> Error {
+        Error::InvalidInput(error.to_string())
+    }
 }
