@@ -14,7 +14,6 @@
 
 use crate::{cursor::Cursor, Oid, PgFormat};
 use std::{
-    convert::TryFrom,
     fmt::{self, Display, Formatter},
 };
 
@@ -70,6 +69,20 @@ impl PgType {
         }
     }
 
+    /// Returns the type corresponding to the provided [Oid], if the it is known.
+    pub fn from_oid(oid: Oid) -> Result<Option<PgType>, NotSupportedOid> {
+        match oid {
+            0 => Ok(None),
+            16 => Ok(Some(PgType::Bool)),
+            18 => Ok(Some(PgType::Char)),
+            20 => Ok(Some(PgType::BigInt)),
+            21 => Ok(Some(PgType::SmallInt)),
+            23 => Ok(Some(PgType::Integer)),
+            1043 => Ok(Some(PgType::VarChar)),
+            _ => Err(NotSupportedOid(oid)),
+        }
+    }
+
     fn decode_binary(&self, raw: &mut Cursor) -> Result<Value, String> {
         match self {
             Self::Bool => parse_bool_from_binary(raw),
@@ -114,23 +127,6 @@ impl Display for PgType {
 /// Not supported OID
 #[derive(Debug, PartialEq)]
 pub struct NotSupportedOid(pub(crate) Oid);
-
-impl TryFrom<Oid> for PgType {
-    type Error = NotSupportedOid;
-
-    /// Returns the type corresponding to the provided [Oid], if the it is known.
-    fn try_from(oid: Oid) -> Result<Self, Self::Error> {
-        match oid {
-            16 => Ok(PgType::Bool),
-            18 => Ok(PgType::Char),
-            20 => Ok(PgType::BigInt),
-            21 => Ok(PgType::SmallInt),
-            23 => Ok(PgType::Integer),
-            1043 => Ok(PgType::VarChar),
-            _ => Err(NotSupportedOid(oid)),
-        }
-    }
-}
 
 impl Display for NotSupportedOid {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -259,43 +255,48 @@ mod tests {
 
         #[test]
         fn not_supported_oid() {
-            assert_eq!(PgType::try_from(1_000_000), Err(NotSupportedOid(1_000_000)));
+            assert_eq!(PgType::from_oid(1_000_000), Err(NotSupportedOid(1_000_000)));
+        }
+
+        #[test]
+        fn undefined() {
+            assert_eq!(PgType::from_oid(0), Ok(None));
         }
 
         #[test]
         fn boolean() {
             assert_eq!(PgType::Bool.type_oid(), 16);
-            assert_eq!(PgType::try_from(PgType::Bool.type_oid()), Ok(PgType::Bool));
+            assert_eq!(PgType::from_oid(PgType::Bool.type_oid()), Ok(Some(PgType::Bool)));
         }
 
         #[test]
         fn character() {
             assert_eq!(PgType::Char.type_oid(), 18);
-            assert_eq!(PgType::try_from(PgType::Char.type_oid()), Ok(PgType::Char));
+            assert_eq!(PgType::from_oid(PgType::Char.type_oid()), Ok(Some(PgType::Char)));
         }
 
         #[test]
         fn big_int() {
             assert_eq!(PgType::BigInt.type_oid(), 20);
-            assert_eq!(PgType::try_from(PgType::BigInt.type_oid()), Ok(PgType::BigInt));
+            assert_eq!(PgType::from_oid(PgType::BigInt.type_oid()), Ok(Some(PgType::BigInt)));
         }
 
         #[test]
         fn small_int() {
             assert_eq!(PgType::SmallInt.type_oid(), 21);
-            assert_eq!(PgType::try_from(PgType::SmallInt.type_oid()), Ok(PgType::SmallInt));
+            assert_eq!(PgType::from_oid(PgType::SmallInt.type_oid()), Ok(Some(PgType::SmallInt)));
         }
 
         #[test]
         fn integer() {
             assert_eq!(PgType::Integer.type_oid(), 23);
-            assert_eq!(PgType::try_from(PgType::Integer.type_oid()), Ok(PgType::Integer));
+            assert_eq!(PgType::from_oid(PgType::Integer.type_oid()), Ok(Some(PgType::Integer)));
         }
 
         #[test]
         fn variable_characters() {
             assert_eq!(PgType::VarChar.type_oid(), 1043);
-            assert_eq!(PgType::try_from(PgType::VarChar.type_oid()), Ok(PgType::VarChar));
+            assert_eq!(PgType::from_oid(PgType::VarChar.type_oid()), Ok(Some(PgType::VarChar)));
         }
     }
 
