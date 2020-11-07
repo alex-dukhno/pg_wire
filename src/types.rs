@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use crate::{cursor::Cursor, Oid, PgFormat};
-use std::{
-    fmt::{self, Display, Formatter},
-};
+use std::fmt::{self, Display, Formatter};
 
 /// Represents PostgreSQL data type and methods to send over wire
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -284,7 +282,10 @@ mod tests {
         #[test]
         fn small_int() {
             assert_eq!(PgType::SmallInt.type_oid(), 21);
-            assert_eq!(PgType::from_oid(PgType::SmallInt.type_oid()), Ok(Some(PgType::SmallInt)));
+            assert_eq!(
+                PgType::from_oid(PgType::SmallInt.type_oid()),
+                Ok(Some(PgType::SmallInt))
+            );
         }
 
         #[test]
