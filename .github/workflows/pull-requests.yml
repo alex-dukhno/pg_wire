@@ -50,7 +50,7 @@ jobs:
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-tarpaulin
-          version: 0.14.0
+          version: 0.16.0
           use-tool-cache: true
       - uses: actions-rs/cargo@v1
         with:
@@ -59,7 +59,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: tarpaulin
-          args: -o Lcov --output-dir ./coverage
+          args: --all --ignore-tests -o Lcov --output-dir ./coverage
       - uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

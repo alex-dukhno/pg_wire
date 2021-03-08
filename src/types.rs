@@ -18,11 +18,11 @@ use std::fmt::{self, Display, Formatter};
 /// Represents PostgreSQL data type and methods to send over wire
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PgType {
-    /// Represents PostgreSQL `smallint` data type
+    /// Represents PostgreSQL `smallint` (or `int2`) data type
     SmallInt,
-    /// Represents PostgreSQL `integer` (or `int`) data type
+    /// Represents PostgreSQL `integer` (or `int` or `int4`) data type
     Integer,
-    /// Represents PostgreSQL `bigint` data type
+    /// Represents PostgreSQL `bigint` (or `int8`) data type
     BigInt,
 
     /// Represents PostgreSQL `character(n)` (or `char(n)`) data type
@@ -122,7 +122,7 @@ impl Display for PgType {
     }
 }
 
-/// Not supported OID
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq)]
 pub struct NotSupportedOid(pub(crate) Oid);
 
