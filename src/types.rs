@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cursor::Cursor, Oid, PgFormat};
+use crate::{
+    cursor::Cursor,
+    result::{Error, Result},
+    Oid, PgFormat,
+};
 use std::fmt::{self, Display, Formatter};
 
 /// Represents PostgreSQL data type and methods to send over wire
@@ -60,7 +64,7 @@ impl PgType {
     }
 
     /// Deserializes a value of this type from `raw` using the specified `format`.
-    pub fn decode(&self, format: &PgFormat, raw: &[u8]) -> Result<Value, String> {
+    pub fn decode(&self, format: &PgFormat, raw: &[u8]) -> Result<Value> {
         match format {
             PgFormat::Binary => self.decode_binary(&mut Cursor::from(raw)),
             PgFormat::Text => self.decode_text(raw),
@@ -68,7 +72,7 @@ impl PgType {
     }
 
     /// Returns the type corresponding to the provided [Oid], if the it is known.
-    pub fn from_oid(oid: Oid) -> Result<Option<PgType>, NotSupportedOid> {
+    pub fn from_oid(oid: Oid) -> Result<Option<PgType>> {
         match oid {
             0 => Ok(None),
             16 => Ok(Some(PgType::Bool)),
@@ -77,11 +81,11 @@ impl PgType {
             21 => Ok(Some(PgType::SmallInt)),
             23 => Ok(Some(PgType::Integer)),
             1043 => Ok(Some(PgType::VarChar)),
-            _ => Err(NotSupportedOid(oid)),
+            _ => Err(NotSupportedOid(oid).into()),
         }
     }
 
-    fn decode_binary(&self, raw: &mut Cursor) -> Result<Value, String> {
+    fn decode_binary(&self, raw: &mut Cursor) -> Result<Value> {
         match self {
             Self::Bool => parse_bool_from_binary(raw),
             Self::Char => parse_char_from_binary(raw),
@@ -92,10 +96,10 @@ impl PgType {
         }
     }
 
-    fn decode_text(&self, raw: &[u8]) -> Result<Value, String> {
+    fn decode_text(&self, raw: &[u8]) -> Result<Value> {
         let s = match std::str::from_utf8(raw) {
             Ok(s) => s,
-            Err(_) => return Err(format!("Failed to parse UTF8 from: {:?}", raw)),
+            Err(_) => return Err(Error::InvalidInput(format!("Failed to parse UTF8 from: {:?}", raw))),
         };
 
         match self {
@@ -124,7 +128,7 @@ impl Display for PgType {
 
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq)]
-pub struct NotSupportedOid(pub(crate) Oid);
+pub(crate) struct NotSupportedOid(pub(crate) Oid);
 
 impl Display for NotSupportedOid {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -132,94 +136,48 @@ impl Display for NotSupportedOid {
     }
 }
 
-fn parse_bigint_from_binary(buf: &mut Cursor) -> Result<Value, String> {
-    let v = match buf.read_i64() {
-        Ok(v) => v,
-        Err(_) => return Err(format!("Failed to parse BigInt from: {:?}", buf)),
-    };
-
-    Ok(Value::Int64(v))
+fn parse_bigint_from_binary(buf: &mut Cursor) -> Result<Value> {
+    buf.read_i64().map(Value::Int64)
 }
 
-fn parse_bigint_from_text(s: &str) -> Result<Value, String> {
-    let v: i64 = match s.trim().parse() {
-        Ok(v) => v,
-        Err(_) => return Err(format!("Failed to parse SmallInt from: {}", s)),
-    };
-
-    Ok(Value::Int64(v))
+fn parse_bigint_from_text(s: &str) -> Result<Value> {
+    s.trim().parse().map(Value::Int64).map_err(Into::into)
 }
 
-fn parse_bool_from_binary(buf: &mut Cursor) -> Result<Value, String> {
-    let v = match buf.read_byte() {
-        Ok(0) => Value::False,
-        Ok(_) => Value::True,
-        _ => return Err("invalid buffer size".into()),
-    };
-
-    Ok(v)
+fn parse_bool_from_binary(buf: &mut Cursor) -> Result<Value> {
+    buf.read_byte().map(|v| Value::Bool(v != 0))
 }
 
-fn parse_bool_from_text(s: &str) -> Result<Value, String> {
+fn parse_bool_from_text(s: &str) -> Result<Value> {
     match s.trim().to_lowercase().as_str() {
-        "t" | "tr" | "tru" | "true" | "y" | "ye" | "yes" | "on" | "1" => Ok(Value::True),
-        "f" | "fa" | "fal" | "fals" | "false" | "n" | "no" | "of" | "off" | "0" => Ok(Value::False),
-        _ => Err(format!("Failed to parse Bool from: {}", s)),
+        "t" | "tr" | "tru" | "true" | "y" | "ye" | "yes" | "on" | "1" => Ok(Value::Bool(true)),
+        "f" | "fa" | "fal" | "fals" | "false" | "n" | "no" | "of" | "off" | "0" => Ok(Value::Bool(false)),
+        _ => Err(Error::InvalidInput(format!("Failed to parse Bool from: {}", s))),
     }
 }
 
-fn parse_char_from_binary(buf: &mut Cursor) -> Result<Value, String> {
-    let s = match buf.read_str() {
-        Ok(s) => s,
-        Err(_) => return Err(format!("Failed to parse UTF8 from: {:?}", buf)),
-    };
-
-    Ok(Value::String(s.into()))
+fn parse_char_from_binary(buf: &mut Cursor) -> Result<Value> {
+    buf.read_str().map(|s| Value::String(s.into()))
 }
 
-fn parse_integer_from_binary(buf: &mut Cursor) -> Result<Value, String> {
-    let v = match buf.read_i32() {
-        Ok(v) => v,
-        Err(_) => return Err(format!("Failed to parse Integer from: {:?}", buf)),
-    };
-
-    Ok(Value::Int32(v))
+fn parse_integer_from_binary(buf: &mut Cursor) -> Result<Value> {
+    buf.read_i32().map(Value::Int32)
 }
 
-fn parse_integer_from_text(s: &str) -> Result<Value, String> {
-    let v: i32 = match s.trim().parse() {
-        Ok(v) => v,
-        Err(_) => return Err(format!("Failed to parse SmallInt from: {}", s)),
-    };
-
-    Ok(Value::Int32(v))
+fn parse_integer_from_text(s: &str) -> Result<Value> {
+    s.trim().parse().map(Value::Int32).map_err(Into::into)
 }
 
-fn parse_smallint_from_binary(buf: &mut Cursor) -> Result<Value, String> {
-    let v = match buf.read_i32() {
-        Ok(v) => v as i16,
-        Err(_) => return Err(format!("Failed to parse SmallInt from: {:?}", buf)),
-    };
-
-    Ok(Value::Int16(v))
+fn parse_smallint_from_binary(buf: &mut Cursor) -> Result<Value> {
+    buf.read_i32().map(|v| Value::Int16(v as i16)).map_err(Into::into)
 }
 
-fn parse_smallint_from_text(s: &str) -> Result<Value, String> {
-    let v: i16 = match s.trim().parse() {
-        Ok(v) => v,
-        Err(_) => return Err(format!("Failed to parse SmallInt from: {}", s)),
-    };
-
-    Ok(Value::Int16(v))
+fn parse_smallint_from_text(s: &str) -> Result<Value> {
+    s.trim().parse().map(Value::Int16).map_err(Into::into)
 }
 
-fn parse_varchar_from_binary(buf: &mut Cursor) -> Result<Value, String> {
-    let s = match buf.read_str() {
-        Ok(s) => s,
-        Err(_) => return Err(format!("Failed to parse UTF8 from: {:?}", buf)),
-    };
-
-    Ok(Value::String(s.into()))
+fn parse_varchar_from_binary(buf: &mut Cursor) -> Result<Value> {
+    buf.read_str().map(|s| Value::String(s.into()))
 }
 
 /// Represents PostgreSQL data values sent and received over wire
@@ -227,8 +185,7 @@ fn parse_varchar_from_binary(buf: &mut Cursor) -> Result<Value, String> {
 #[derive(Debug, PartialEq)]
 pub enum Value {
     Null,
-    True,
-    False,
+    Bool(bool),
     Int16(i16),
     Int32(i32),
     Int64(i64),
@@ -245,7 +202,7 @@ mod tests {
 
         #[test]
         fn not_supported_oid() {
-            assert_eq!(PgType::from_oid(1_000_000), Err(NotSupportedOid(1_000_000)));
+            assert_eq!(PgType::from_oid(1_000_000), Err(NotSupportedOid(1_000_000).into()));
         }
 
         #[test]
@@ -369,12 +326,12 @@ mod tests {
 
         #[test]
         fn decode_true() {
-            assert_eq!(PgType::Bool.decode(&PgFormat::Binary, &[1]), Ok(Value::True));
+            assert_eq!(PgType::Bool.decode(&PgFormat::Binary, &[1]), Ok(Value::Bool(true)));
         }
 
         #[test]
         fn decode_false() {
-            assert_eq!(PgType::Bool.decode(&PgFormat::Binary, &[0]), Ok(Value::False));
+            assert_eq!(PgType::Bool.decode(&PgFormat::Binary, &[0]), Ok(Value::Bool(false)));
         }
 
         #[test]
@@ -426,18 +383,18 @@ mod tests {
         fn error_decode_text() {
             assert_eq!(
                 PgType::Bool.decode(&PgFormat::Text, &[0x96]),
-                Err("Failed to parse UTF8 from: [150]".into())
+                Err(Error::InvalidInput("Failed to parse UTF8 from: [150]".into()))
             );
         }
 
         #[test]
         fn decode_true() {
-            assert_eq!(PgType::Bool.decode(&PgFormat::Text, b"true"), Ok(Value::True));
+            assert_eq!(PgType::Bool.decode(&PgFormat::Text, b"true"), Ok(Value::Bool(true)));
         }
 
         #[test]
         fn decode_false() {
-            assert_eq!(PgType::Bool.decode(&PgFormat::Text, b"0"), Ok(Value::False));
+            assert_eq!(PgType::Bool.decode(&PgFormat::Text, b"0"), Ok(Value::Bool(false)));
         }
 
         #[test]

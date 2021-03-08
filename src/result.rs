@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::types::NotSupportedOid;
+use crate::{format::UnrecognizedFormat, types::NotSupportedOid};
+use std::num::ParseIntError;
 
 /// Protocol operation result
 pub type Result<T> = std::result::Result<T, Error>;
@@ -43,5 +44,47 @@ pub enum Error {
 impl From<NotSupportedOid> for Error {
     fn from(error: NotSupportedOid) -> Error {
         Error::InvalidInput(error.to_string())
+    }
+}
+
+impl From<UnrecognizedFormat> for Error {
+    fn from(error: UnrecognizedFormat) -> Error {
+        Error::InvalidInput(format!("unknown format code: {}", error.0))
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(error: ParseIntError) -> Self {
+        Error::InvalidInput(error.to_string())
+    }
+}
+
+#[cfg(test)]
+mod error_conversion {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn from_not_supported_oid() {
+        assert_eq!(
+            Error::from(NotSupportedOid(100)),
+            Error::InvalidInput("100 OID is not supported".to_owned())
+        );
+    }
+
+    #[test]
+    fn from_unrecognized_format() {
+        assert_eq!(
+            Error::from(UnrecognizedFormat(100)),
+            Error::InvalidInput("unknown format code: 100".to_owned())
+        );
+    }
+
+    #[test]
+    fn from_parse_int_error() {
+        assert_eq!(
+            Error::from(i32::from_str("1.2").unwrap_err()),
+            Error::InvalidInput("invalid digit found in string".to_owned())
+        );
     }
 }
