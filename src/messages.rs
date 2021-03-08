@@ -423,10 +423,7 @@ fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage> {
 }
 
 fn decode_format(cursor: &mut Cursor) -> Result<PgFormat> {
-    match PgFormat::try_from(cursor.read_i16()?) {
-        Ok(format) => Ok(format),
-        Err(error) => Err(error.into()),
-    }
+    PgFormat::try_from(cursor.read_i16()?).map_err(Into::into)
 }
 
 fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage> {

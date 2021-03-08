@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Error;
 use std::convert::TryFrom;
 
 /// PostgreSQL formats for transferring data
@@ -27,24 +26,28 @@ pub enum PgFormat {
 }
 
 impl TryFrom<i16> for PgFormat {
-    type Error = UnrecognizedFormat;
+    type Error = crate::Error;
 
-    fn try_from(value: i16) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: i16) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(PgFormat::Text),
             1 => Ok(PgFormat::Binary),
-            other => Err(UnrecognizedFormat(other)),
+            other => Err(UnrecognizedFormat(other).into()),
         }
     }
 }
 
 /// Represents an error if frontend sent unrecognizable format
 /// contains the integer code that was sent
-#[derive(Debug)]
-pub struct UnrecognizedFormat(pub(crate) i16);
+#[derive(Debug, PartialEq)]
+pub(crate) struct UnrecognizedFormat(pub(crate) i16);
 
-impl From<UnrecognizedFormat> for Error {
-    fn from(error: UnrecognizedFormat) -> Error {
-        Error::InvalidInput(format!("unknown format code: {}", error.0))
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unrecognized_format() {
+        assert_eq!(PgFormat::try_from(2), Err(UnrecognizedFormat(2).into()));
     }
 }
