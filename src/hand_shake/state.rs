@@ -46,7 +46,7 @@ impl ConnectionTransition<SetupParsed> for ReadSetupMessage {
                 let mut props = vec![];
                 loop {
                     let key = cursor.read_cstr()?.to_owned();
-                    if key == "" {
+                    if key.is_empty() {
                         break;
                     }
                     let value = cursor.read_cstr()?.to_owned();

@@ -18,11 +18,11 @@ use std::fmt::{self, Display, Formatter};
 /// Represents PostgreSQL data type and methods to send over wire
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PgType {
-    /// Represents PostgreSQL `smallint` data type
+    /// Represents PostgreSQL `smallint` (or `int2`) data type
     SmallInt,
-    /// Represents PostgreSQL `integer` (or `int`) data type
+    /// Represents PostgreSQL `integer` (or `int` or `int4`) data type
     Integer,
-    /// Represents PostgreSQL `bigint` data type
+    /// Represents PostgreSQL `bigint` (or `int8`) data type
     BigInt,
 
     /// Represents PostgreSQL `character(n)` (or `char(n)`) data type
@@ -100,8 +100,8 @@ impl PgType {
 
         match self {
             Self::Bool => parse_bool_from_text(s),
-            Self::Char => parse_char_from_text(s),
-            Self::VarChar => parse_varchar_from_text(s),
+            Self::Char => Ok(Value::String(s.into())),
+            Self::VarChar => Ok(Value::String(s.into())),
             Self::SmallInt => parse_smallint_from_text(s),
             Self::Integer => parse_integer_from_text(s),
             Self::BigInt => parse_bigint_from_text(s),
@@ -122,7 +122,7 @@ impl Display for PgType {
     }
 }
 
-/// Not supported OID
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq)]
 pub struct NotSupportedOid(pub(crate) Oid);
 
@@ -177,10 +177,6 @@ fn parse_char_from_binary(buf: &mut Cursor) -> Result<Value, String> {
     Ok(Value::String(s.into()))
 }
 
-fn parse_char_from_text(s: &str) -> Result<Value, String> {
-    Ok(Value::String(s.into()))
-}
-
 fn parse_integer_from_binary(buf: &mut Cursor) -> Result<Value, String> {
     let v = match buf.read_i32() {
         Ok(v) => v,
@@ -223,10 +219,6 @@ fn parse_varchar_from_binary(buf: &mut Cursor) -> Result<Value, String> {
         Err(_) => return Err(format!("Failed to parse UTF8 from: {:?}", buf)),
     };
 
-    Ok(Value::String(s.into()))
-}
-
-fn parse_varchar_from_text(s: &str) -> Result<Value, String> {
     Ok(Value::String(s.into()))
 }
 
