@@ -100,8 +100,8 @@ impl PgType {
 
         match self {
             Self::Bool => parse_bool_from_text(s),
-            Self::Char => parse_char_from_text(s),
-            Self::VarChar => parse_varchar_from_text(s),
+            Self::Char => Ok(Value::String(s.into())),
+            Self::VarChar => Ok(Value::String(s.into())),
             Self::SmallInt => parse_smallint_from_text(s),
             Self::Integer => parse_integer_from_text(s),
             Self::BigInt => parse_bigint_from_text(s),
@@ -177,10 +177,6 @@ fn parse_char_from_binary(buf: &mut Cursor) -> Result<Value, String> {
     Ok(Value::String(s.into()))
 }
 
-fn parse_char_from_text(s: &str) -> Result<Value, String> {
-    Ok(Value::String(s.into()))
-}
-
 fn parse_integer_from_binary(buf: &mut Cursor) -> Result<Value, String> {
     let v = match buf.read_i32() {
         Ok(v) => v,
@@ -223,10 +219,6 @@ fn parse_varchar_from_binary(buf: &mut Cursor) -> Result<Value, String> {
         Err(_) => return Err(format!("Failed to parse UTF8 from: {:?}", buf)),
     };
 
-    Ok(Value::String(s.into()))
-}
-
-fn parse_varchar_from_text(s: &str) -> Result<Value, String> {
     Ok(Value::String(s.into()))
 }
 

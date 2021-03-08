@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cursor::Cursor, types::PgType, ConnId, ConnSecretKey, Error, PgFormat, Result, UnrecognizedFormat};
+use crate::{cursor::Cursor, types::PgType, ConnId, ConnSecretKey, Error, PgFormat, Result};
 use std::convert::TryFrom;
 
 const COMMAND_COMPLETE: u8 = b'C';
@@ -171,11 +171,11 @@ impl FrontendMessage {
             CLOSE => decode_close(cursor),
             DESCRIBE => decode_describe(cursor),
             EXECUTE => decode_execute(cursor),
-            FLUSH => decode_flush(cursor),
+            FLUSH => Ok(FrontendMessage::Flush),
             PARSE => decode_parse(cursor),
-            SYNC => decode_sync(cursor),
+            SYNC => Ok(FrontendMessage::Sync),
 
-            TERMINATE => decode_terminate(cursor),
+            TERMINATE => Ok(FrontendMessage::Terminate),
 
             // Invalid.
             _ => {
@@ -390,10 +390,7 @@ fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage> {
 
     let mut param_formats = vec![];
     for _ in 0..cursor.read_i16()? {
-        match PgFormat::try_from(cursor.read_i16()?) {
-            Ok(format) => param_formats.push(format),
-            Err(UnrecognizedFormat(code)) => return Err(Error::InvalidInput(format!("unknown format code: {}", code))),
-        }
+        param_formats.push(decode_format(&mut cursor)?);
     }
 
     let mut raw_params = vec![];
@@ -413,10 +410,7 @@ fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage> {
 
     let mut result_formats = vec![];
     for _ in 0..cursor.read_i16()? {
-        match PgFormat::try_from(cursor.read_i16()?) {
-            Ok(format) => result_formats.push(format),
-            Err(UnrecognizedFormat(code)) => return Err(Error::InvalidInput(format!("unknown format code: {}", code))),
-        }
+        result_formats.push(decode_format(&mut cursor)?);
     }
 
     Ok(FrontendMessage::Bind {
@@ -428,6 +422,13 @@ fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage> {
     })
 }
 
+fn decode_format(cursor: &mut Cursor) -> Result<PgFormat> {
+    match PgFormat::try_from(cursor.read_i16()?) {
+        Ok(format) => Ok(format),
+        Err(error) => Err(error.into()),
+    }
+}
+
 fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage> {
     let first_char = cursor.read_byte()?;
     let name = cursor.read_cstr()?.to_owned();
@@ -436,7 +437,7 @@ fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage> {
         b'S' => Ok(FrontendMessage::CloseStatement { name }),
         other => Err(Error::InvalidInput(format!(
             "invalid type byte in Close frontend message: {:?}",
-            std::char::from_u32(other as u32).unwrap(),
+            char::from(other),
         ))),
     }
 }
@@ -460,19 +461,15 @@ fn decode_execute(mut cursor: Cursor) -> Result<FrontendMessage> {
     Ok(FrontendMessage::Execute { portal_name, max_rows })
 }
 
-fn decode_flush(_cursor: Cursor) -> Result<FrontendMessage> {
-    Ok(FrontendMessage::Flush)
-}
-
 fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage> {
     let statement_name = cursor.read_cstr()?.to_owned();
     let sql = cursor.read_cstr()?.to_owned();
 
     let mut param_types = vec![];
     for _ in 0..cursor.read_i16()? {
-        let oid = PgType::from_oid(cursor.read_u32()?)?;
-        log::trace!("OID {:?}", oid);
-        param_types.push(oid);
+        let pg_type = PgType::from_oid(cursor.read_u32()?)?;
+        log::trace!("received parameter of {:?} PostgreSQL Type", pg_type);
+        param_types.push(pg_type);
     }
 
     Ok(FrontendMessage::Parse {
@@ -482,17 +479,9 @@ fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage> {
     })
 }
 
-fn decode_sync(_cursor: Cursor) -> Result<FrontendMessage> {
-    Ok(FrontendMessage::Sync)
-}
-
 fn decode_query(mut cursor: Cursor) -> Result<FrontendMessage> {
     let sql = cursor.read_cstr()?.to_owned();
     Ok(FrontendMessage::Query { sql })
-}
-
-fn decode_terminate(_cursor: Cursor) -> Result<FrontendMessage> {
-    Ok(FrontendMessage::Terminate)
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Error;
 use std::convert::TryFrom;
 
 /// PostgreSQL formats for transferring data
@@ -41,3 +42,9 @@ impl TryFrom<i16> for PgFormat {
 /// contains the integer code that was sent
 #[derive(Debug)]
 pub struct UnrecognizedFormat(pub(crate) i16);
+
+impl From<UnrecognizedFormat> for Error {
+    fn from(error: UnrecognizedFormat) -> Error {
+        Error::InvalidInput(format!("unknown format code: {}", error.0))
+    }
+}
