@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cursor::Cursor, types::PgType, ConnId, ConnSecretKey, Error, PgFormat, Result};
+use crate::{cursor::Cursor, types::PgType, ConnId, ConnSecretKey, Error, PgFormat};
 use std::convert::TryFrom;
 
 const COMMAND_COMPLETE: u8 = b'C';
@@ -158,7 +158,7 @@ pub enum FrontendMessage {
 
 impl FrontendMessage {
     /// decodes buffer data to a frontend message
-    pub fn decode(tag: u8, buffer: &[u8]) -> Result<Self> {
+    pub fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, Error> {
         log::trace!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
 
         let cursor = Cursor::from(buffer);
@@ -384,7 +384,7 @@ impl ColumnMetadata {
     }
 }
 
-fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage> {
+fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
     let portal_name = cursor.read_cstr()?.to_owned();
     let statement_name = cursor.read_cstr()?.to_owned();
 
@@ -422,11 +422,11 @@ fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage> {
     })
 }
 
-fn decode_format(cursor: &mut Cursor) -> Result<PgFormat> {
+fn decode_format(cursor: &mut Cursor) -> Result<PgFormat, Error> {
     PgFormat::try_from(cursor.read_i16()?).map_err(Into::into)
 }
 
-fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage> {
+fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
     let first_char = cursor.read_byte()?;
     let name = cursor.read_cstr()?.to_owned();
     match first_char {
@@ -439,7 +439,7 @@ fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage> {
     }
 }
 
-fn decode_describe(mut cursor: Cursor) -> Result<FrontendMessage> {
+fn decode_describe(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
     let first_char = cursor.read_byte()?;
     let name = cursor.read_cstr()?.to_owned();
     match first_char {
@@ -452,13 +452,13 @@ fn decode_describe(mut cursor: Cursor) -> Result<FrontendMessage> {
     }
 }
 
-fn decode_execute(mut cursor: Cursor) -> Result<FrontendMessage> {
+fn decode_execute(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
     let portal_name = cursor.read_cstr()?.to_owned();
     let max_rows = cursor.read_i32()?;
     Ok(FrontendMessage::Execute { portal_name, max_rows })
 }
 
-fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage> {
+fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
     let statement_name = cursor.read_cstr()?.to_owned();
     let sql = cursor.read_cstr()?.to_owned();
 
@@ -476,7 +476,7 @@ fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage> {
     })
 }
 
-fn decode_query(mut cursor: Cursor) -> Result<FrontendMessage> {
+fn decode_query(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
     let sql = cursor.read_cstr()?.to_owned();
     Ok(FrontendMessage::Query { sql })
 }

@@ -14,12 +14,12 @@
 
 use crate::{
     cursor::Cursor,
+    errors::Error,
     message_decoder::state::{Payload, Tag},
     messages::FrontendMessage,
-    Result,
 };
 use state::State;
-use std::mem::MaybeUninit;
+use std::mem::{self, MaybeUninit};
 
 mod state;
 
@@ -36,6 +36,28 @@ pub enum Status {
 }
 
 /// Decodes messages from client
+///
+/// # Examples
+///
+/// ```ignore
+/// use pg_wire::{MessageDecoder, MessageDecoderStatus};
+///
+/// let mut message_decoder = MessageDecoder::new();
+/// let mut current: Option<Vec<u8>> = None;
+/// loop {
+///     log::debug!("Read bytes from connection {:?}", current);
+///     match message_decoder.next_stage(current.take().as_deref()) {
+///         Ok(MessageDecoderStatus::Requesting(len)) => {
+///             let mut buffer = vec![b'0'; len];
+///             channel.read_exact(&mut buffer)?;
+///             current = Some(buffer);
+///         }
+///         Ok(MessageDecoderStatus::Decoding) => {}
+///         Ok(MessageDecoderStatus::Done(message)) => return Ok(Ok(message)),
+///         Err(error) => return Err(error),
+///     }
+/// }
+/// ```
 pub struct MessageDecoder {
     state: State,
     tag: u8,
@@ -57,10 +79,10 @@ impl MessageDecoder {
     }
 
     /// Proceed to the next stage of decoding received message
-    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status> {
+    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status, Error> {
         let payload = if let Some(payload) = payload { payload } else { &[] };
         let mut state = unsafe { MaybeUninit::zeroed().assume_init() };
-        std::mem::swap(&mut state, &mut self.state);
+        mem::swap(&mut state, &mut self.state);
         let (new_state, prev) = state.try_step(payload)?;
         self.state = new_state;
         match prev {

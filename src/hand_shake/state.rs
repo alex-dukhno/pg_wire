@@ -15,18 +15,18 @@
 use crate::{
     cursor::Cursor,
     request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
-    ConnId, ConnSecretKey, Error, Result,
+    ConnId, ConnSecretKey, Error,
 };
 
 trait ConnectionTransition<C> {
-    fn transit(self, cursor: &mut Cursor) -> Result<C>;
+    fn transit(self, cursor: &mut Cursor) -> Result<C, Error>;
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) struct MessageLen(pub(crate) usize);
 
 impl ConnectionTransition<ReadSetupMessage> for MessageLen {
-    fn transit(self, cursor: &mut Cursor) -> Result<ReadSetupMessage> {
+    fn transit(self, cursor: &mut Cursor) -> Result<ReadSetupMessage, Error> {
         let len = cursor.read_i32()?;
         Ok(ReadSetupMessage((len - 4) as usize))
     }
@@ -36,12 +36,10 @@ impl ConnectionTransition<ReadSetupMessage> for MessageLen {
 pub(crate) struct ReadSetupMessage(pub(crate) usize);
 
 impl ConnectionTransition<SetupParsed> for ReadSetupMessage {
-    fn transit(self, cursor: &mut Cursor) -> Result<SetupParsed> {
+    fn transit(self, cursor: &mut Cursor) -> Result<SetupParsed, Error> {
         let code = Code(cursor.read_i32()?);
-        log::info!("Connection Code: {}", code);
         match code {
-            VERSION_1_CODE => Err(Error::UnsupportedVersion),
-            VERSION_2_CODE => Err(Error::UnsupportedVersion),
+            VERSION_1_CODE | VERSION_2_CODE => Err(Error::UnsupportedVersion(code)),
             VERSION_3_CODE => {
                 let mut props = vec![];
                 loop {
@@ -60,7 +58,7 @@ impl ConnectionTransition<SetupParsed> for ReadSetupMessage {
                 Ok(SetupParsed::Cancel(conn_id, secret_key))
             }
             SSL_REQUEST_CODE => Ok(SetupParsed::Secure),
-            _ => Err(Error::UnsupportedRequest),
+            otherwise => Err(Error::UnsupportedRequest(otherwise)),
         }
     }
 }
@@ -84,7 +82,7 @@ impl State {
         State::MessageLen(MessageLen(4))
     }
 
-    pub(crate) fn try_step(self, buf: &[u8]) -> Result<State> {
+    pub(crate) fn try_step(self, buf: &[u8]) -> Result<State, Error> {
         let mut buffer = Cursor::from(buf);
         match self {
             State::MessageLen(hand_shake) => Ok(State::ParseSetup(hand_shake.transit(&mut buffer)?)),
@@ -127,7 +125,9 @@ mod connection_state_machine {
 
         assert_eq!(
             hand_shake.try_step(b"non_recognizable_code"),
-            Err(Error::UnsupportedRequest)
+            Err(Error::UnsupportedRequest(Code(
+                Cursor::from(b"non_recognizable_code".as_ref()).read_i32().unwrap()
+            )))
         );
     }
 
@@ -139,7 +139,7 @@ mod connection_state_machine {
 
         assert_eq!(
             hand_shake.try_step(&Vec::from(VERSION_1_CODE)),
-            Err(Error::UnsupportedVersion)
+            Err(Error::UnsupportedVersion(VERSION_1_CODE))
         );
     }
 
@@ -151,7 +151,7 @@ mod connection_state_machine {
 
         assert_eq!(
             hand_shake.try_step(&Vec::from(VERSION_2_CODE)),
-            Err(Error::UnsupportedVersion)
+            Err(Error::UnsupportedVersion(VERSION_2_CODE))
         );
     }
 
@@ -218,7 +218,7 @@ mod connection_state_machine {
 
         assert_eq!(
             hand_shake.try_step(&Vec::from(GSSENC_REQUEST_CODE)),
-            Err(Error::UnsupportedRequest)
+            Err(Error::UnsupportedRequest(GSSENC_REQUEST_CODE))
         );
     }
 

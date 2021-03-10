@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConnId, ConnSecretKey, Result};
+use crate::{ConnId, ConnSecretKey, Error};
 use state::{MessageLen, ReadSetupMessage, SetupParsed, State};
 
 mod state;
@@ -63,7 +63,7 @@ impl Process {
     }
 
     /// Proceed to the next stage of client <-> server hand shake
-    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status> {
+    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status, Error> {
         match self.state.take() {
             None => {
                 self.state = Some(State::new());
@@ -92,7 +92,7 @@ impl Process {
     }
 }
 
-/// Represents status of the [Process] stages
+/// Represents status of the [HandShakeProcess](Process) stages
 #[derive(Debug, PartialEq)]
 pub enum Status {
     /// Hand shake process requesting additional data or action to proceed further

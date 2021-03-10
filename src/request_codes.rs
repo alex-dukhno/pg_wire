@@ -25,24 +25,28 @@ pub(crate) const CANCEL_REQUEST_CODE: Code = Code(80_877_102);
 /// Client initiate `ssl` connection
 pub(crate) const SSL_REQUEST_CODE: Code = Code(80_877_103);
 /// Client initiate `gss` encrypted connection
-#[allow(dead_code)]
 pub(crate) const GSSENC_REQUEST_CODE: Code = Code(80_877_104);
 
-/// Client Request Code
-#[derive(PartialEq, Eq, Copy, Clone)]
-pub(crate) struct Code(pub(crate) i32);
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct Code(pub(crate) i32);
 
 impl Display for Code {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            8087_7102 => write!(f, "Cancel Request"),
-            8087_7103 => write!(f, "SSL Request"),
-            8087_7104 => write!(f, "GSSENC Request"),
-            _ => write!(
+        match self {
+            &CANCEL_REQUEST_CODE => write!(f, "Cancel Request"),
+            &SSL_REQUEST_CODE => write!(f, "SSL Request"),
+            &GSSENC_REQUEST_CODE => write!(f, "GSSENC Request"),
+            &VERSION_1_CODE | &VERSION_2_CODE | &VERSION_3_CODE => write!(
                 f,
                 "Version {}.{} Request",
                 (self.0 >> 16) as i16,
                 (self.0 & 0x00_00_FF_FF) as i16
+            ),
+            other => write!(
+                f,
+                "High bytes 0x{:x?} Low bytes: 0x{:x?}",
+                (other.0 >> 16) as i16,
+                (other.0 & 0x00_00_FF_FF) as i16
             ),
         }
     }
@@ -86,5 +90,10 @@ mod code_display_tests {
     #[test]
     fn gssenc_request() {
         assert_eq!(GSSENC_REQUEST_CODE.to_string(), "GSSENC Request")
+    }
+
+    #[test]
+    fn other_request() {
+        assert_eq!(Code(0x11_22_33_44).to_string(), "High bytes 0x1122 Low bytes: 0x3344")
     }
 }
