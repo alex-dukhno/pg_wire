@@ -12,24 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Error;
-use std::str::{self, Utf8Error};
-
-#[derive(Debug, PartialEq)]
-pub enum CursorError<'e> {
-    InvalidUtfString { cause: Utf8Error, source: &'e [u8] },
-    CStringNotTerminated { source: &'e [u8] },
-}
-
-// temporal WA while API is changing
-impl<'e> From<CursorError<'e>> for Error {
-    fn from(error: CursorError<'_>) -> Self {
-        match error {
-            CursorError::InvalidUtfString { .. } => Error::InvalidUtfString,
-            CursorError::CStringNotTerminated { .. } => Error::ZeroByteNotFound,
-        }
-    }
-}
+use crate::errors::{PayloadError, PayloadErrorKind};
+use std::str;
 
 /// Cursor over `u8` slice to decode it into primitive types from big endian format
 #[derive(Debug)]
@@ -49,95 +33,66 @@ impl<'c> From<&'c Cursor<'c>> for Vec<u8> {
     }
 }
 
-impl<'a> Cursor<'a> {
+impl<'c> Cursor<'c> {
     fn advance(&mut self, n: usize) {
         self.buf = &self.buf[n..]
     }
 
-    fn peek_byte(&self) -> Result<u8, Error> {
-        self.buf
-            .get(0)
-            .copied()
-            .ok_or_else(|| Error::InvalidInput("No byte to read".to_owned()))
+    fn peek_byte(&self) -> Result<u8, PayloadError<'c>> {
+        self.buf.get(0).copied().ok_or_else(|| PayloadError::from(PayloadErrorKind::ReachEndOfCursor))
     }
 
-    pub(crate) fn read_byte(&mut self) -> Result<u8, Error> {
+    pub(crate) fn read_byte(&mut self) -> Result<u8, PayloadError<'c>> {
         let byte = self.peek_byte()?;
         self.advance(1);
         Ok(byte)
     }
 
-    /// Returns the next null-terminated string. The null character is not
-    /// included the returned string. The cursor is advanced past the null-
-    /// terminated string.
-    pub(crate) fn read_cstr(&mut self) -> Result<&'a str, CursorError> {
-        if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
-            let val = str::from_utf8(&self.buf[..pos]).map_err(|cause| CursorError::InvalidUtfString {
-                cause,
-                source: &self.buf[..pos],
-            })?;
-            self.advance(pos + 1);
-            Ok(val)
+    fn consume_next(&mut self, size: usize) -> Result<&'c [u8], PayloadError<'c>> {
+        if self.buf.len() < size {
+            Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
+                required: size as u8,
+                bytes_left: self.buf,
+            }))
         } else {
-            Err(CursorError::CStringNotTerminated { source: &self.buf[..] })
+            let buf = &self.buf[0..size];
+            self.advance(size);
+            Ok(buf)
         }
     }
 
-    pub(crate) fn read_str(&mut self) -> Result<&'a str, CursorError> {
-        let val = str::from_utf8(&self.buf).map_err(|cause| CursorError::InvalidUtfString {
-            cause,
-            source: &self.buf,
-        })?;
-        self.advance(self.buf.len());
-        Ok(val)
+    /// Returns the next null-terminated string. The null character is not
+    /// included the returned string. The cursor is advanced past the null-
+    /// terminated string.
+    pub(crate) fn read_cstr(&mut self) -> Result<&'c str, PayloadError<'c>> {
+        if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
+            let val = str::from_utf8(&self.buf[..pos]).map_err(|cause| PayloadError::from(PayloadErrorKind::InvalidUtfString {
+                cause,
+                source: &self.buf[..pos],
+            }))?;
+            self.advance(pos + 1);
+            Ok(val)
+        } else {
+            Err(PayloadError::from(PayloadErrorKind::CStringNotTerminated { source: &self.buf[..] }))
+        }
     }
 
     /// Reads the next 16-bit signed integer, advancing the cursor by two
     /// bytes.
-    pub(crate) fn read_i16(&mut self) -> Result<i16, Error> {
-        if self.buf.len() < 2 {
-            return Err(Error::InvalidInput("not enough buffer to read 16bit Int".to_owned()));
-        }
-        let val = i16::from_be_bytes([self.buf[0], self.buf[1]]);
-        self.advance(2);
-        Ok(val)
+    pub(crate) fn read_i16(&mut self) -> Result<i16, PayloadError<'c>> {
+        self.consume_next(2).map(|buf| i16::from_be_bytes([buf[0], buf[1]]))
     }
 
     /// Reads the next 32-bit signed integer, advancing the cursor by four
     /// bytes.
-    pub(crate) fn read_i32(&mut self) -> Result<i32, Error> {
-        if self.buf.len() < 4 {
-            return Err(Error::InvalidInput("not enough buffer to read 32bit Int".to_owned()));
-        }
-        let val = i32::from_be_bytes([self.buf[0], self.buf[1], self.buf[2], self.buf[3]]);
-        self.advance(4);
-        Ok(val)
+    pub(crate) fn read_i32(&mut self) -> Result<i32, PayloadError<'c>> {
+        self.consume_next(4).map(|buf| i32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]))
     }
 
     /// Reads the next 32-bit unsigned integer, advancing the cursor by four
     /// bytes.
-    pub(crate) fn read_u32(&mut self) -> Result<u32, Error> {
+    pub(crate) fn read_u32(&mut self) -> Result<u32, PayloadError<'c>> {
         self.read_i32().map(|val| val as u32)
-    }
-
-    /// Reads the next 64-bit signed integer, advancing the cursor by eight
-    /// bytes.
-    pub(crate) fn read_i64(&mut self) -> Result<i64, Error> {
-        if self.buf.len() < 8 {
-            return Err(Error::InvalidInput("not enough buffer to read 64bit Int".to_owned()));
-        }
-        let val = i64::from_be_bytes([
-            self.buf[0],
-            self.buf[1],
-            self.buf[2],
-            self.buf[3],
-            self.buf[4],
-            self.buf[5],
-            self.buf[6],
-            self.buf[7],
-        ]);
-        self.advance(8);
-        Ok(val)
     }
 }
 
@@ -156,10 +111,7 @@ mod tests {
     fn error_read_byte() {
         let buffer = vec![];
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(
-            cursor.read_byte(),
-            Err(Error::InvalidInput("No byte to read".to_owned()))
-        );
+        assert_eq!(cursor.read_byte(), Err(PayloadError::from(PayloadErrorKind::ReachEndOfCursor)));
     }
 
     #[test]
@@ -175,9 +127,9 @@ mod tests {
         let mut cursor = Cursor::from(buffer.as_slice());
         assert_eq!(
             cursor.read_cstr(),
-            Err(CursorError::CStringNotTerminated {
+            Err(PayloadError::from(PayloadErrorKind::CStringNotTerminated {
                 source: buffer.as_slice()
-            })
+            }))
         );
     }
 
@@ -190,32 +142,10 @@ mod tests {
         let mut cursor = Cursor::from(buffer.as_slice());
         assert_eq!(
             cursor.read_cstr(),
-            Err(CursorError::InvalidUtfString {
-                cause: std::str::from_utf8(&buffer).unwrap_err(),
+            Err(PayloadError::from(PayloadErrorKind::InvalidUtfString {
+                cause: str::from_utf8(&buffer).unwrap_err(),
                 source: &buffer[..buffer.len() - 1]
-            })
-        );
-    }
-
-    #[test]
-    fn ok_read_str() {
-        let buffer = b"some string".to_vec();
-        let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_str(), Ok("some string"));
-    }
-
-    #[test]
-    fn invalid_utf_read_str() {
-        let invalid_utf_byte = 0x96;
-        let mut buffer = b"some string".to_vec();
-        buffer.push(invalid_utf_byte);
-        let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(
-            cursor.read_str(),
-            Err(CursorError::InvalidUtfString {
-                cause: std::str::from_utf8(&buffer).unwrap_err(),
-                source: &buffer
-            })
+            }))
         );
     }
 
@@ -232,7 +162,10 @@ mod tests {
         let mut cursor = Cursor::from(buffer.as_slice());
         assert_eq!(
             cursor.read_i16(),
-            Err(Error::InvalidInput("not enough buffer to read 16bit Int".into()))
+            Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
+                required: 2,
+                bytes_left: &buffer
+            }))
         );
     }
 
@@ -249,7 +182,10 @@ mod tests {
         let mut cursor = Cursor::from(buffer.as_slice());
         assert_eq!(
             cursor.read_i32(),
-            Err(Error::InvalidInput("not enough buffer to read 32bit Int".into()))
+            Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
+                required: 4,
+                bytes_left: &buffer
+            }))
         );
     }
 
@@ -266,24 +202,10 @@ mod tests {
         let mut cursor = Cursor::from(buffer.as_slice());
         assert_eq!(
             cursor.read_u32(),
-            Err(Error::InvalidInput("not enough buffer to read 32bit Int".into()))
-        );
-    }
-
-    #[test]
-    fn ok_read_i64() {
-        let buffer = 123i64.to_be_bytes().to_vec();
-        let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_i64(), Ok(123));
-    }
-
-    #[test]
-    fn error_read_i64() {
-        let buffer = 123i16.to_be_bytes().to_vec();
-        let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(
-            cursor.read_i64(),
-            Err(Error::InvalidInput("not enough buffer to read 64bit Int".into()))
+            Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
+                required: 4,
+                bytes_left: &buffer
+            }))
         );
     }
 }

@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{errors::Error, Oid, PgFormat};
+use crate::{errors::{Error, TypeValueDecodeErrorKind}, Oid, PgFormat, TypeValueDecodeError};
 use std::{
     fmt::{self, Display, Formatter},
-    num::ParseIntError,
-    str::{self, Utf8Error},
+    str,
 };
 
 const BOOL_TRUE: &[&str] = &["t", "tr", "tru", "true", "y", "ye", "yes", "on", "1"];
@@ -67,10 +66,10 @@ impl PgType {
     }
 
     /// Deserializes a value of this type from `raw` using the specified `format`.
-    pub fn decode<'d>(&'d self, format: &'d PgFormat, raw: &'d [u8]) -> Result<Value, DecodeError<'d>> {
+    pub fn decode<'d>(&'d self, format: &'d PgFormat, raw: &'d [u8]) -> Result<Value, TypeValueDecodeError<'d>> {
         match format {
-            PgFormat::Binary => self.decode_binary(raw),
-            PgFormat::Text => self.decode_text(raw),
+            PgFormat::Binary => self.decode_binary(raw).map_err(Into::into),
+            PgFormat::Text => self.decode_text(raw).map_err(Into::into),
         }
     }
 
@@ -88,11 +87,11 @@ impl PgType {
         }
     }
 
-    fn decode_binary<'d>(&'d self, raw: &'d [u8]) -> Result<Value, DecodeError<'d>> {
+    fn decode_binary<'d>(&'d self, raw: &'d [u8]) -> Result<Value, TypeValueDecodeErrorKind<'d>> {
         match self {
             PgType::Bool => {
-                if raw.len() < 1 {
-                    Err(DecodeError::NotEnoughBytes {
+                if raw.is_empty() {
+                    Err(TypeValueDecodeErrorKind::NotEnoughBytes {
                         required_bytes: 1,
                         source: raw,
                         pg_type: *self,
@@ -103,10 +102,10 @@ impl PgType {
             }
             PgType::Char | PgType::VarChar => str::from_utf8(raw)
                 .map(|s| Value::String(s.into()))
-                .map_err(|cause| DecodeError::CannotDecodeString { cause, source: raw }),
+                .map_err(|cause| TypeValueDecodeErrorKind::CannotDecodeString { cause, source: raw }),
             PgType::SmallInt => {
                 if raw.len() < 4 {
-                    Err(DecodeError::NotEnoughBytes {
+                    Err(TypeValueDecodeErrorKind::NotEnoughBytes {
                         required_bytes: 4,
                         source: raw,
                         pg_type: *self,
@@ -117,7 +116,7 @@ impl PgType {
             }
             PgType::Integer => {
                 if raw.len() < 4 {
-                    Err(DecodeError::NotEnoughBytes {
+                    Err(TypeValueDecodeErrorKind::NotEnoughBytes {
                         required_bytes: 4,
                         source: raw,
                         pg_type: *self,
@@ -128,7 +127,7 @@ impl PgType {
             }
             PgType::BigInt => {
                 if raw.len() < 8 {
-                    Err(DecodeError::NotEnoughBytes {
+                    Err(TypeValueDecodeErrorKind::NotEnoughBytes {
                         required_bytes: 8,
                         source: raw,
                         pg_type: *self,
@@ -142,10 +141,10 @@ impl PgType {
         }
     }
 
-    fn decode_text<'d>(&'d self, raw: &'d [u8]) -> Result<Value, DecodeError<'d>> {
+    fn decode_text<'d>(&'d self, raw: &'d [u8]) -> Result<Value, TypeValueDecodeErrorKind<'d>> {
         let s = match str::from_utf8(raw) {
             Ok(s) => s,
-            Err(cause) => return Err(Err(DecodeError::CannotDecodeString { cause, source: raw })?),
+            Err(cause) => return Err(TypeValueDecodeErrorKind::CannotDecodeString { cause, source: raw }),
         };
 
         match self {
@@ -156,38 +155,41 @@ impl PgType {
                 } else if BOOL_FALSE.contains(&v.as_str()) {
                     Ok(Value::Bool(false))
                 } else {
-                    Err(DecodeError::CannotParseBool { source: s })
+                    Err(TypeValueDecodeErrorKind::CannotParseBool { source: s })
                 }
             }
             PgType::Char => Ok(Value::String(s.into())),
             PgType::VarChar => Ok(Value::String(s.into())),
-            PgType::SmallInt => s
-                .trim()
-                .parse()
-                .map(Value::Int16)
-                .map_err(|cause| DecodeError::CannotParseInt {
-                    cause,
-                    source: s,
-                    pg_type: *self,
-                }),
-            PgType::Integer => s
-                .trim()
-                .parse()
-                .map(Value::Int32)
-                .map_err(|cause| DecodeError::CannotParseInt {
-                    cause,
-                    source: s,
-                    pg_type: *self,
-                }),
-            PgType::BigInt => s
-                .trim()
-                .parse()
-                .map(Value::Int64)
-                .map_err(|cause| DecodeError::CannotParseInt {
-                    cause,
-                    source: s,
-                    pg_type: *self,
-                }),
+            PgType::SmallInt => {
+                s.trim()
+                    .parse()
+                    .map(Value::Int16)
+                    .map_err(|cause| TypeValueDecodeErrorKind::CannotParseInt {
+                        cause,
+                        source: s,
+                        pg_type: *self,
+                    })
+            }
+            PgType::Integer => {
+                s.trim()
+                    .parse()
+                    .map(Value::Int32)
+                    .map_err(|cause| TypeValueDecodeErrorKind::CannotParseInt {
+                        cause,
+                        source: s,
+                        pg_type: *self,
+                    })
+            }
+            PgType::BigInt => {
+                s.trim()
+                    .parse()
+                    .map(Value::Int64)
+                    .map_err(|cause| TypeValueDecodeErrorKind::CannotParseInt {
+                        cause,
+                        source: s,
+                        pg_type: *self,
+                    })
+            }
         }
     }
 }
@@ -203,27 +205,6 @@ impl Display for PgType {
             PgType::VarChar => write!(f, "variable character"),
         }
     }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum DecodeError<'e> {
-    NotEnoughBytes {
-        required_bytes: u8,
-        source: &'e [u8],
-        pg_type: PgType,
-    },
-    CannotDecodeString {
-        cause: Utf8Error,
-        source: &'e [u8],
-    },
-    CannotParseBool {
-        source: &'e str,
-    },
-    CannotParseInt {
-        cause: ParseIntError,
-        source: &'e str,
-        pg_type: PgType,
-    },
 }
 
 /// Represents PostgreSQL data values sent and received over wire
@@ -385,11 +366,11 @@ mod tests {
         fn error_decode_bool() {
             assert_eq!(
                 PgType::Bool.decode(&PgFormat::Binary, &[]),
-                Err(DecodeError::NotEnoughBytes {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::NotEnoughBytes {
                     required_bytes: 1,
                     source: &[],
                     pg_type: PgType::Bool
-                })
+                }))
             );
         }
 
@@ -414,10 +395,10 @@ mod tests {
             let non_utf_code = 0x96;
             assert_eq!(
                 PgType::Char.decode(&PgFormat::Binary, &[non_utf_code]),
-                Err(DecodeError::CannotDecodeString {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotDecodeString {
                     cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
                     source: &[non_utf_code]
-                })
+                }))
             );
         }
 
@@ -433,11 +414,11 @@ mod tests {
         fn error_decode_smallint() {
             assert_eq!(
                 PgType::SmallInt.decode(&PgFormat::Binary, &[0, 0, 1]),
-                Err(DecodeError::NotEnoughBytes {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::NotEnoughBytes {
                     required_bytes: 4,
                     source: &[0, 0, 1],
                     pg_type: PgType::SmallInt
-                })
+                }))
             );
         }
 
@@ -453,11 +434,11 @@ mod tests {
         fn error_decode_integer() {
             assert_eq!(
                 PgType::Integer.decode(&PgFormat::Binary, &[0, 0, 1]),
-                Err(DecodeError::NotEnoughBytes {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::NotEnoughBytes {
                     required_bytes: 4,
                     source: &[0, 0, 1],
                     pg_type: PgType::Integer
-                })
+                }))
             );
         }
 
@@ -473,19 +454,20 @@ mod tests {
         fn error_decode_bigint() {
             assert_eq!(
                 PgType::BigInt.decode(&PgFormat::Binary, &[0, 0, 1]),
-                Err(DecodeError::NotEnoughBytes {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::NotEnoughBytes {
                     required_bytes: 8,
                     source: &[0, 0, 1],
                     pg_type: PgType::BigInt
-                })
+                }))
             );
         }
     }
 
     #[cfg(test)]
     mod text_decoding {
-        use super::*;
         use std::str::FromStr;
+
+        use super::*;
 
         #[test]
         fn decode_true() {
@@ -501,7 +483,7 @@ mod tests {
         fn error_decode_bool() {
             assert_eq!(
                 PgType::Bool.decode(&PgFormat::Text, b"abc"),
-                Err(DecodeError::CannotParseBool { source: "abc" })
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseBool { source: "abc" }))
             );
         }
 
@@ -526,10 +508,10 @@ mod tests {
             let non_utf_code = 0x96;
             assert_eq!(
                 PgType::Char.decode(&PgFormat::Text, &[non_utf_code]),
-                Err(DecodeError::CannotDecodeString {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotDecodeString {
                     cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
                     source: &[non_utf_code]
-                })
+                }))
             );
         }
 
@@ -542,11 +524,11 @@ mod tests {
         fn error_decode_smallint() {
             assert_eq!(
                 PgType::SmallInt.decode(&PgFormat::Text, b"1.0"),
-                Err(DecodeError::CannotParseInt {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseInt {
                     cause: i16::from_str("1.0").unwrap_err(),
                     source: &"1.0",
                     pg_type: PgType::SmallInt
-                })
+                }))
             );
         }
 
@@ -559,11 +541,11 @@ mod tests {
         fn error_decode_integer() {
             assert_eq!(
                 PgType::Integer.decode(&PgFormat::Text, b"1.0"),
-                Err(DecodeError::CannotParseInt {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseInt {
                     cause: i32::from_str("1.0").unwrap_err(),
                     source: &"1.0",
                     pg_type: PgType::Integer
-                })
+                }))
             );
         }
 
@@ -579,11 +561,11 @@ mod tests {
         fn error_decode_bigint() {
             assert_eq!(
                 PgType::BigInt.decode(&PgFormat::Text, b"1.0"),
-                Err(DecodeError::CannotParseInt {
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseInt {
                     cause: i64::from_str("1.0").unwrap_err(),
                     source: &"1.0",
                     pg_type: PgType::BigInt
-                })
+                }))
             );
         }
     }

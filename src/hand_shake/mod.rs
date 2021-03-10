@@ -92,7 +92,7 @@ impl Process {
     }
 }
 
-/// Represents status of the [Process] stages
+/// Represents status of the [HandShakeProcess](Process) stages
 #[derive(Debug, PartialEq)]
 pub enum Status {
     /// Hand shake process requesting additional data or action to proceed further

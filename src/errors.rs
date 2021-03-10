@@ -12,8 +12,75 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{format::UnrecognizedFormat, request_codes::Code, Oid};
-use std::num::ParseIntError;
+use crate::{format::UnrecognizedFormat, request_codes::Code, Oid, PgType};
+use std::{num::ParseIntError, str::Utf8Error};
+
+/// An error which can be returned when decoding raw bytes into [Value](crate::types::Value)
+#[derive(Debug, PartialEq)]
+pub struct TypeValueDecodeError<'e> {
+    kind: TypeValueDecodeErrorKind<'e>
+}
+
+impl<'e> From<TypeValueDecodeErrorKind<'e>> for TypeValueDecodeError<'e> {
+    fn from(kind: TypeValueDecodeErrorKind<'e>) -> TypeValueDecodeError<'_> {
+        TypeValueDecodeError { kind }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum TypeValueDecodeErrorKind<'e> {
+    NotEnoughBytes {
+        required_bytes: u8,
+        source: &'e [u8],
+        pg_type: PgType,
+    },
+    CannotDecodeString {
+        cause: Utf8Error,
+        source: &'e [u8],
+    },
+    CannotParseBool {
+        source: &'e str,
+    },
+    CannotParseInt {
+        cause: ParseIntError,
+        source: &'e str,
+        pg_type: PgType,
+    },
+}
+
+/// An error which can be returned when decoding raw bytes into [crate::messages::FrontendMessage]s
+#[derive(Debug, PartialEq)]
+pub struct PayloadError<'e> {
+    kind: PayloadErrorKind<'e>
+}
+
+impl<'e> From<PayloadErrorKind<'e>> for PayloadError<'e> {
+    fn from(kind: PayloadErrorKind<'e>) -> PayloadError {
+        PayloadError { kind }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum PayloadErrorKind<'e> {
+    InvalidUtfString { cause: Utf8Error, source: &'e [u8] },
+    CStringNotTerminated { source: &'e [u8] },
+    ReachEndOfCursor,
+    NotEnoughBytes { required: u8, bytes_left: &'e [u8] },
+}
+
+// temporal WA while API is changing
+impl<'e> From<PayloadError<'e>> for Error {
+    fn from(error: PayloadError<'_>) -> Self {
+        match error.kind {
+            PayloadErrorKind::InvalidUtfString { .. } => Error::InvalidUtfString,
+            PayloadErrorKind::CStringNotTerminated { .. } => Error::ZeroByteNotFound,
+            PayloadErrorKind::ReachEndOfCursor => Error::InvalidInput("No byte to read".to_owned()),
+            PayloadErrorKind::NotEnoughBytes { .. } => {
+                Error::InvalidInput("not enough buffer to read 32bit Int".to_owned())
+            }
+        }
+    }
+}
 
 /// `Error` type in protocol `Result`. Indicates that something went not well
 #[derive(Debug, PartialEq)]
@@ -52,8 +119,8 @@ impl From<ParseIntError> for Error {
 
 #[cfg(test)]
 mod error_conversion {
-    use super::*;
     use std::str::FromStr;
+    use super::*;
 
     #[test]
     fn from_unrecognized_format() {
