@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{format::UnrecognizedFormat, types::NotSupportedOid};
+use crate::{format::UnrecognizedFormat, request_codes::Code, Oid};
 use std::num::ParseIntError;
-
-/// Protocol operation result
-pub type Result<T> = std::result::Result<T, Error>;
 
 /// `Error` type in protocol `Result`. Indicates that something went not well
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    /// Indicates that the current count of active connections is full
-    ConnectionIdExhausted,
+    /// Indicates that not supported `Oid` was used to transfer info
+    NotSupportedOid(Oid),
     /// Indicates that incoming data is invalid
     InvalidInput(String),
     /// Indicates that incoming data can't be parsed as UTF-8 string
@@ -32,19 +29,13 @@ pub enum Error {
     /// Indicates that frontend message is not supported
     UnsupportedFrontendMessage,
     /// Indicates that protocol version is not supported
-    UnsupportedVersion,
+    UnsupportedVersion(Code),
     /// Indicates that client request is not supported
-    UnsupportedRequest,
+    UnsupportedRequest(Code),
     /// Indicates that during handshake client sent unrecognized protocol version
     UnrecognizedVersion,
     /// Indicates that connection verification is failed
     VerificationFailed,
-}
-
-impl From<NotSupportedOid> for Error {
-    fn from(error: NotSupportedOid) -> Error {
-        Error::InvalidInput(error.to_string())
-    }
 }
 
 impl From<UnrecognizedFormat> for Error {
@@ -63,14 +54,6 @@ impl From<ParseIntError> for Error {
 mod error_conversion {
     use super::*;
     use std::str::FromStr;
-
-    #[test]
-    fn from_not_supported_oid() {
-        assert_eq!(
-            Error::from(NotSupportedOid(100)),
-            Error::InvalidInput("100 OID is not supported".to_owned())
-        );
-    }
 
     #[test]
     fn from_unrecognized_format() {

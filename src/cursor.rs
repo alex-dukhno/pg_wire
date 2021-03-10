@@ -12,12 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Error, Result};
+use crate::Error;
+use std::str::{self, Utf8Error};
+
+#[derive(Debug, PartialEq)]
+pub enum CursorError<'e> {
+    InvalidUtfString { cause: Utf8Error, source: &'e [u8] },
+    CStringNotTerminated { source: &'e [u8] },
+}
+
+// temporal WA while API is changing
+impl<'e> From<CursorError<'e>> for Error {
+    fn from(error: CursorError<'_>) -> Self {
+        match error {
+            CursorError::InvalidUtfString { .. } => Error::InvalidUtfString,
+            CursorError::CStringNotTerminated { .. } => Error::ZeroByteNotFound,
+        }
+    }
+}
 
 /// Cursor over `u8` slice to decode it into primitive types from big endian format
 #[derive(Debug)]
-pub(crate) struct Cursor<'a> {
-    buf: &'a [u8],
+pub(crate) struct Cursor<'c> {
+    buf: &'c [u8],
 }
 
 impl<'c> From<&'c [u8]> for Cursor<'c> {
@@ -37,14 +54,14 @@ impl<'a> Cursor<'a> {
         self.buf = &self.buf[n..]
     }
 
-    fn peek_byte(&self) -> Result<u8> {
+    fn peek_byte(&self) -> Result<u8, Error> {
         self.buf
             .get(0)
             .copied()
             .ok_or_else(|| Error::InvalidInput("No byte to read".to_owned()))
     }
 
-    pub(crate) fn read_byte(&mut self) -> Result<u8> {
+    pub(crate) fn read_byte(&mut self) -> Result<u8, Error> {
         let byte = self.peek_byte()?;
         self.advance(1);
         Ok(byte)
@@ -53,25 +70,31 @@ impl<'a> Cursor<'a> {
     /// Returns the next null-terminated string. The null character is not
     /// included the returned string. The cursor is advanced past the null-
     /// terminated string.
-    pub(crate) fn read_cstr(&mut self) -> Result<&'a str> {
+    pub(crate) fn read_cstr(&mut self) -> Result<&'a str, CursorError> {
         if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
-            let val = std::str::from_utf8(&self.buf[..pos]).map_err(|_e| Error::InvalidUtfString)?;
+            let val = str::from_utf8(&self.buf[..pos]).map_err(|cause| CursorError::InvalidUtfString {
+                cause,
+                source: &self.buf[..pos],
+            })?;
             self.advance(pos + 1);
             Ok(val)
         } else {
-            Err(Error::ZeroByteNotFound)
+            Err(CursorError::CStringNotTerminated { source: &self.buf[..] })
         }
     }
 
-    pub(crate) fn read_str(&mut self) -> Result<&'a str> {
-        let val = std::str::from_utf8(&self.buf).map_err(|_e| Error::InvalidUtfString)?;
+    pub(crate) fn read_str(&mut self) -> Result<&'a str, CursorError> {
+        let val = str::from_utf8(&self.buf).map_err(|cause| CursorError::InvalidUtfString {
+            cause,
+            source: &self.buf,
+        })?;
         self.advance(self.buf.len());
         Ok(val)
     }
 
     /// Reads the next 16-bit signed integer, advancing the cursor by two
     /// bytes.
-    pub(crate) fn read_i16(&mut self) -> Result<i16> {
+    pub(crate) fn read_i16(&mut self) -> Result<i16, Error> {
         if self.buf.len() < 2 {
             return Err(Error::InvalidInput("not enough buffer to read 16bit Int".to_owned()));
         }
@@ -82,7 +105,7 @@ impl<'a> Cursor<'a> {
 
     /// Reads the next 32-bit signed integer, advancing the cursor by four
     /// bytes.
-    pub(crate) fn read_i32(&mut self) -> Result<i32> {
+    pub(crate) fn read_i32(&mut self) -> Result<i32, Error> {
         if self.buf.len() < 4 {
             return Err(Error::InvalidInput("not enough buffer to read 32bit Int".to_owned()));
         }
@@ -93,13 +116,13 @@ impl<'a> Cursor<'a> {
 
     /// Reads the next 32-bit unsigned integer, advancing the cursor by four
     /// bytes.
-    pub(crate) fn read_u32(&mut self) -> Result<u32> {
+    pub(crate) fn read_u32(&mut self) -> Result<u32, Error> {
         self.read_i32().map(|val| val as u32)
     }
 
     /// Reads the next 64-bit signed integer, advancing the cursor by eight
     /// bytes.
-    pub(crate) fn read_i64(&mut self) -> Result<i64> {
+    pub(crate) fn read_i64(&mut self) -> Result<i64, Error> {
         if self.buf.len() < 8 {
             return Err(Error::InvalidInput("not enough buffer to read 64bit Int".to_owned()));
         }
@@ -150,17 +173,28 @@ mod tests {
     fn error_read_cstr() {
         let buffer = b"some string".to_vec();
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_cstr(), Err(Error::ZeroByteNotFound));
+        assert_eq!(
+            cursor.read_cstr(),
+            Err(CursorError::CStringNotTerminated {
+                source: buffer.as_slice()
+            })
+        );
     }
 
     #[test]
     fn invalid_utf_read_cstr() {
         let invalid_utf_byte = 0x96;
         let mut buffer = b"some string".to_vec();
-        buffer.push(invalid_utf_byte); // invalid utf byte
+        buffer.push(invalid_utf_byte);
         buffer.push(0);
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_cstr(), Err(Error::InvalidUtfString));
+        assert_eq!(
+            cursor.read_cstr(),
+            Err(CursorError::InvalidUtfString {
+                cause: std::str::from_utf8(&buffer).unwrap_err(),
+                source: &buffer[..buffer.len() - 1]
+            })
+        );
     }
 
     #[test]
@@ -174,9 +208,15 @@ mod tests {
     fn invalid_utf_read_str() {
         let invalid_utf_byte = 0x96;
         let mut buffer = b"some string".to_vec();
-        buffer.push(invalid_utf_byte); // invalid utf byte
+        buffer.push(invalid_utf_byte);
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_str(), Err(Error::InvalidUtfString));
+        assert_eq!(
+            cursor.read_str(),
+            Err(CursorError::InvalidUtfString {
+                cause: std::str::from_utf8(&buffer).unwrap_err(),
+                source: &buffer
+            })
+        );
     }
 
     #[test]

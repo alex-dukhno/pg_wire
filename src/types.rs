@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    cursor::Cursor,
-    result::{Error, Result},
-    Oid, PgFormat,
+use crate::{errors::Error, Oid, PgFormat};
+use std::{
+    fmt::{self, Display, Formatter},
+    num::ParseIntError,
+    str::{self, Utf8Error},
 };
-use std::fmt::{self, Display, Formatter};
+
+const BOOL_TRUE: &[&str] = &["t", "tr", "tru", "true", "y", "ye", "yes", "on", "1"];
+const BOOL_FALSE: &[&str] = &["f", "fa", "fal", "fals", "false", "n", "no", "of", "off", "0"];
 
 /// Represents PostgreSQL data type and methods to send over wire
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -54,25 +57,25 @@ impl PgType {
     /// Returns PostgreSQL type length
     pub fn type_len(&self) -> i16 {
         match self {
-            Self::Bool => 1,
-            Self::Char => 1,
-            Self::BigInt => 8,
-            Self::SmallInt => 2,
-            Self::Integer => 4,
-            Self::VarChar => -1,
+            PgType::Bool => 1,
+            PgType::Char => 1,
+            PgType::BigInt => 8,
+            PgType::SmallInt => 2,
+            PgType::Integer => 4,
+            PgType::VarChar => -1,
         }
     }
 
     /// Deserializes a value of this type from `raw` using the specified `format`.
-    pub fn decode(&self, format: &PgFormat, raw: &[u8]) -> Result<Value> {
+    pub fn decode<'d>(&'d self, format: &'d PgFormat, raw: &'d [u8]) -> Result<Value, DecodeError<'d>> {
         match format {
-            PgFormat::Binary => self.decode_binary(&mut Cursor::from(raw)),
+            PgFormat::Binary => self.decode_binary(raw),
             PgFormat::Text => self.decode_text(raw),
         }
     }
 
     /// Returns the type corresponding to the provided [Oid], if the it is known.
-    pub fn from_oid(oid: Oid) -> Result<Option<PgType>> {
+    pub fn from_oid(oid: Oid) -> Result<Option<PgType>, Error> {
         match oid {
             0 => Ok(None),
             16 => Ok(Some(PgType::Bool)),
@@ -81,34 +84,110 @@ impl PgType {
             21 => Ok(Some(PgType::SmallInt)),
             23 => Ok(Some(PgType::Integer)),
             1043 => Ok(Some(PgType::VarChar)),
-            _ => Err(NotSupportedOid(oid).into()),
+            _ => Err(Error::NotSupportedOid(oid)),
         }
     }
 
-    fn decode_binary(&self, raw: &mut Cursor) -> Result<Value> {
+    fn decode_binary<'d>(&'d self, raw: &'d [u8]) -> Result<Value, DecodeError<'d>> {
         match self {
-            Self::Bool => parse_bool_from_binary(raw),
-            Self::Char => parse_char_from_binary(raw),
-            Self::VarChar => parse_varchar_from_binary(raw),
-            Self::SmallInt => parse_smallint_from_binary(raw),
-            Self::Integer => parse_integer_from_binary(raw),
-            Self::BigInt => parse_bigint_from_binary(raw),
+            PgType::Bool => {
+                if raw.len() < 1 {
+                    Err(DecodeError::NotEnoughBytes {
+                        required_bytes: 1,
+                        source: raw,
+                        type_name: self.to_string(),
+                    })
+                } else {
+                    Ok(Value::Bool(raw[0] != 0))
+                }
+            }
+            PgType::Char | PgType::VarChar => str::from_utf8(raw)
+                .map(|s| Value::String(s.into()))
+                .map_err(|cause| DecodeError::CannotDecodeString { cause, source: raw }),
+            PgType::SmallInt => {
+                if raw.len() < 4 {
+                    Err(DecodeError::NotEnoughBytes {
+                        required_bytes: 4,
+                        source: raw,
+                        type_name: self.to_string(),
+                    })
+                } else {
+                    Ok(Value::Int16(i32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]) as i16))
+                }
+            }
+            PgType::Integer => {
+                if raw.len() < 4 {
+                    Err(DecodeError::NotEnoughBytes {
+                        required_bytes: 4,
+                        source: raw,
+                        type_name: self.to_string(),
+                    })
+                } else {
+                    Ok(Value::Int32(i32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]])))
+                }
+            }
+            PgType::BigInt => {
+                if raw.len() < 8 {
+                    Err(DecodeError::NotEnoughBytes {
+                        required_bytes: 8,
+                        source: raw,
+                        type_name: self.to_string(),
+                    })
+                } else {
+                    Ok(Value::Int64(i64::from_be_bytes([
+                        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
+                    ])))
+                }
+            }
         }
     }
 
-    fn decode_text(&self, raw: &[u8]) -> Result<Value> {
-        let s = match std::str::from_utf8(raw) {
+    fn decode_text<'d>(&'d self, raw: &'d [u8]) -> Result<Value, DecodeError<'d>> {
+        let s = match str::from_utf8(raw) {
             Ok(s) => s,
-            Err(_) => return Err(Error::InvalidInput(format!("Failed to parse UTF8 from: {:?}", raw))),
+            Err(cause) => return Err(Err(DecodeError::CannotDecodeString { cause, source: raw })?),
         };
 
         match self {
-            Self::Bool => parse_bool_from_text(s),
-            Self::Char => Ok(Value::String(s.into())),
-            Self::VarChar => Ok(Value::String(s.into())),
-            Self::SmallInt => parse_smallint_from_text(s),
-            Self::Integer => parse_integer_from_text(s),
-            Self::BigInt => parse_bigint_from_text(s),
+            PgType::Bool => {
+                let v = s.trim().to_lowercase();
+                if BOOL_TRUE.contains(&v.as_str()) {
+                    Ok(Value::Bool(true))
+                } else if BOOL_FALSE.contains(&v.as_str()) {
+                    Ok(Value::Bool(false))
+                } else {
+                    Err(DecodeError::CannotParseBool { source: s })
+                }
+            }
+            PgType::Char => Ok(Value::String(s.into())),
+            PgType::VarChar => Ok(Value::String(s.into())),
+            PgType::SmallInt => s
+                .trim()
+                .parse()
+                .map(Value::Int16)
+                .map_err(|cause| DecodeError::CannotParseInt {
+                    cause,
+                    source: s,
+                    pg_type: *self,
+                }),
+            PgType::Integer => s
+                .trim()
+                .parse()
+                .map(Value::Int32)
+                .map_err(|cause| DecodeError::CannotParseInt {
+                    cause,
+                    source: s,
+                    pg_type: *self,
+                }),
+            PgType::BigInt => s
+                .trim()
+                .parse()
+                .map(Value::Int64)
+                .map_err(|cause| DecodeError::CannotParseInt {
+                    cause,
+                    source: s,
+                    pg_type: *self,
+                }),
         }
     }
 }
@@ -116,68 +195,46 @@ impl PgType {
 impl Display for PgType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Bool => write!(f, "boolean"),
-            Self::Char => write!(f, "character"),
-            Self::BigInt => write!(f, "bigint"),
-            Self::SmallInt => write!(f, "smallint"),
-            Self::Integer => write!(f, "integer"),
-            Self::VarChar => write!(f, "variable character"),
+            PgType::Bool => write!(f, "boolean"),
+            PgType::Char => write!(f, "character"),
+            PgType::BigInt => write!(f, "bigint"),
+            PgType::SmallInt => write!(f, "smallint"),
+            PgType::Integer => write!(f, "integer"),
+            PgType::VarChar => write!(f, "variable character"),
         }
     }
 }
 
-#[allow(missing_docs)]
 #[derive(Debug, PartialEq)]
-pub(crate) struct NotSupportedOid(pub(crate) Oid);
+pub enum DecodeError<'e> {
+    NotEnoughBytes {
+        required_bytes: u8,
+        source: &'e [u8],
+        type_name: String,
+    },
+    CannotDecodeString {
+        cause: Utf8Error,
+        source: &'e [u8],
+    },
+    CannotParseBool {
+        source: &'e str,
+    },
+    CannotParseInt {
+        cause: ParseIntError,
+        source: &'e str,
+        pg_type: PgType,
+    },
+}
 
-impl Display for NotSupportedOid {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} OID is not supported", self.0)
+impl<'e> From<DecodeError<'e>> for Error {
+    fn from(error: DecodeError) -> Self {
+        match error {
+            DecodeError::NotEnoughBytes { .. } => Error::InvalidInput("No byte to read".to_owned()),
+            DecodeError::CannotDecodeString { .. } => Error::InvalidUtfString,
+            DecodeError::CannotParseBool { .. } => Error::InvalidInput("Failed to parse UTF8 from: [150]".to_owned()),
+            DecodeError::CannotParseInt { .. } => Error::InvalidInput("Failed to parse UTF8 from: [150]".to_owned()),
+        }
     }
-}
-
-fn parse_bigint_from_binary(buf: &mut Cursor) -> Result<Value> {
-    buf.read_i64().map(Value::Int64)
-}
-
-fn parse_bigint_from_text(s: &str) -> Result<Value> {
-    s.trim().parse().map(Value::Int64).map_err(Into::into)
-}
-
-fn parse_bool_from_binary(buf: &mut Cursor) -> Result<Value> {
-    buf.read_byte().map(|v| Value::Bool(v != 0))
-}
-
-fn parse_bool_from_text(s: &str) -> Result<Value> {
-    match s.trim().to_lowercase().as_str() {
-        "t" | "tr" | "tru" | "true" | "y" | "ye" | "yes" | "on" | "1" => Ok(Value::Bool(true)),
-        "f" | "fa" | "fal" | "fals" | "false" | "n" | "no" | "of" | "off" | "0" => Ok(Value::Bool(false)),
-        _ => Err(Error::InvalidInput(format!("Failed to parse Bool from: {}", s))),
-    }
-}
-
-fn parse_char_from_binary(buf: &mut Cursor) -> Result<Value> {
-    buf.read_str().map(|s| Value::String(s.into()))
-}
-
-fn parse_integer_from_binary(buf: &mut Cursor) -> Result<Value> {
-    buf.read_i32().map(Value::Int32)
-}
-
-fn parse_integer_from_text(s: &str) -> Result<Value> {
-    s.trim().parse().map(Value::Int32).map_err(Into::into)
-}
-
-fn parse_smallint_from_binary(buf: &mut Cursor) -> Result<Value> {
-    buf.read_i32().map(|v| Value::Int16(v as i16)).map_err(Into::into)
-}
-
-fn parse_smallint_from_text(s: &str) -> Result<Value> {
-    s.trim().parse().map(Value::Int16).map_err(Into::into)
-}
-
-fn parse_varchar_from_binary(buf: &mut Cursor) -> Result<Value> {
-    buf.read_str().map(|s| Value::String(s.into()))
 }
 
 /// Represents PostgreSQL data values sent and received over wire
@@ -189,6 +246,7 @@ pub enum Value {
     Int16(i16),
     Int32(i32),
     Int64(i64),
+    /// Supports only UTF-8 encoding
     String(String),
 }
 
@@ -202,7 +260,7 @@ mod tests {
 
         #[test]
         fn not_supported_oid() {
-            assert_eq!(PgType::from_oid(1_000_000), Err(NotSupportedOid(1_000_000).into()));
+            assert_eq!(PgType::from_oid(1_000_000), Err(Error::NotSupportedOid(1_000_000)));
         }
 
         #[test]
@@ -378,12 +436,17 @@ mod tests {
     #[cfg(test)]
     mod text_decoding {
         use super::*;
+        use std::str::FromStr;
 
         #[test]
         fn error_decode_text() {
+            let non_utf_code = 0x96;
             assert_eq!(
-                PgType::Bool.decode(&PgFormat::Text, &[0x96]),
-                Err(Error::InvalidInput("Failed to parse UTF8 from: [150]".into()))
+                PgType::Bool.decode(&PgFormat::Text, &[non_utf_code]),
+                Err(DecodeError::CannotDecodeString {
+                    cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
+                    source: &[non_utf_code]
+                })
             );
         }
 
@@ -395,6 +458,14 @@ mod tests {
         #[test]
         fn decode_false() {
             assert_eq!(PgType::Bool.decode(&PgFormat::Text, b"0"), Ok(Value::Bool(false)));
+        }
+
+        #[test]
+        fn error_decode_bool() {
+            assert_eq!(
+                PgType::Bool.decode(&PgFormat::Text, b"abc"),
+                Err(DecodeError::CannotParseBool { source: "abc" })
+            );
         }
 
         #[test]
@@ -419,8 +490,32 @@ mod tests {
         }
 
         #[test]
+        fn error_decode_smallint() {
+            assert_eq!(
+                PgType::SmallInt.decode(&PgFormat::Text, b"1.0"),
+                Err(DecodeError::CannotParseInt {
+                    cause: i16::from_str("1.0").unwrap_err(),
+                    source: &"1.0",
+                    pg_type: PgType::SmallInt
+                })
+            );
+        }
+
+        #[test]
         fn decode_integer() {
             assert_eq!(PgType::Integer.decode(&PgFormat::Text, b"123"), Ok(Value::Int32(123)));
+        }
+
+        #[test]
+        fn error_decode_integer() {
+            assert_eq!(
+                PgType::Integer.decode(&PgFormat::Text, b"1.0"),
+                Err(DecodeError::CannotParseInt {
+                    cause: i32::from_str("1.0").unwrap_err(),
+                    source: &"1.0",
+                    pg_type: PgType::Integer
+                })
+            );
         }
 
         #[test]
@@ -428,6 +523,18 @@ mod tests {
             assert_eq!(
                 PgType::BigInt.decode(&PgFormat::Text, b"123456"),
                 Ok(Value::Int64(123456))
+            );
+        }
+
+        #[test]
+        fn error_decode_bigint() {
+            assert_eq!(
+                PgType::BigInt.decode(&PgFormat::Text, b"1.0"),
+                Err(DecodeError::CannotParseInt {
+                    cause: i64::from_str("1.0").unwrap_err(),
+                    source: &"1.0",
+                    pg_type: PgType::BigInt
+                })
             );
         }
     }

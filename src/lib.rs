@@ -15,14 +15,15 @@
 #![warn(missing_docs)]
 //! API for backend implementation of PostgreSQL Wire Protocol
 
+pub use errors::Error;
 pub use format::PgFormat;
 pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
-pub use result::{Error, Result};
 pub use types::{PgType, Value};
 
 mod cursor;
+mod errors;
 mod format;
 mod hand_shake;
 mod message_decoder;
@@ -30,7 +31,6 @@ mod message_decoder;
 /// to a client
 mod messages;
 mod request_codes;
-mod result;
 mod types;
 
 /// Connection key-value params
