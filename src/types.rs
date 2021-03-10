@@ -95,7 +95,7 @@ impl PgType {
                     Err(DecodeError::NotEnoughBytes {
                         required_bytes: 1,
                         source: raw,
-                        type_name: self.to_string(),
+                        pg_type: *self,
                     })
                 } else {
                     Ok(Value::Bool(raw[0] != 0))
@@ -109,7 +109,7 @@ impl PgType {
                     Err(DecodeError::NotEnoughBytes {
                         required_bytes: 4,
                         source: raw,
-                        type_name: self.to_string(),
+                        pg_type: *self,
                     })
                 } else {
                     Ok(Value::Int16(i32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]]) as i16))
@@ -120,7 +120,7 @@ impl PgType {
                     Err(DecodeError::NotEnoughBytes {
                         required_bytes: 4,
                         source: raw,
-                        type_name: self.to_string(),
+                        pg_type: *self,
                     })
                 } else {
                     Ok(Value::Int32(i32::from_be_bytes([raw[0], raw[1], raw[2], raw[3]])))
@@ -131,7 +131,7 @@ impl PgType {
                     Err(DecodeError::NotEnoughBytes {
                         required_bytes: 8,
                         source: raw,
-                        type_name: self.to_string(),
+                        pg_type: *self,
                     })
                 } else {
                     Ok(Value::Int64(i64::from_be_bytes([
@@ -210,7 +210,7 @@ pub enum DecodeError<'e> {
     NotEnoughBytes {
         required_bytes: u8,
         source: &'e [u8],
-        type_name: String,
+        pg_type: PgType,
     },
     CannotDecodeString {
         cause: Utf8Error,
@@ -224,17 +224,6 @@ pub enum DecodeError<'e> {
         source: &'e str,
         pg_type: PgType,
     },
-}
-
-impl<'e> From<DecodeError<'e>> for Error {
-    fn from(error: DecodeError) -> Self {
-        match error {
-            DecodeError::NotEnoughBytes { .. } => Error::InvalidInput("No byte to read".to_owned()),
-            DecodeError::CannotDecodeString { .. } => Error::InvalidUtfString,
-            DecodeError::CannotParseBool { .. } => Error::InvalidInput("Failed to parse UTF8 from: [150]".to_owned()),
-            DecodeError::CannotParseInt { .. } => Error::InvalidInput("Failed to parse UTF8 from: [150]".to_owned()),
-        }
-    }
 }
 
 /// Represents PostgreSQL data values sent and received over wire
@@ -393,6 +382,18 @@ mod tests {
         }
 
         #[test]
+        fn error_decode_bool() {
+            assert_eq!(
+                PgType::Bool.decode(&PgFormat::Binary, &[]),
+                Err(DecodeError::NotEnoughBytes {
+                    required_bytes: 1,
+                    source: &[],
+                    pg_type: PgType::Bool
+                })
+            );
+        }
+
+        #[test]
         fn decode_char() {
             assert_eq!(
                 PgType::Char.decode(&PgFormat::Binary, &[97, 98, 99]),
@@ -409,10 +410,34 @@ mod tests {
         }
 
         #[test]
+        fn error_decode_string() {
+            let non_utf_code = 0x96;
+            assert_eq!(
+                PgType::Char.decode(&PgFormat::Binary, &[non_utf_code]),
+                Err(DecodeError::CannotDecodeString {
+                    cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
+                    source: &[non_utf_code]
+                })
+            );
+        }
+
+        #[test]
         fn decode_smallint() {
             assert_eq!(
                 PgType::SmallInt.decode(&PgFormat::Binary, &[0, 0, 0, 1]),
                 Ok(Value::Int16(1))
+            );
+        }
+
+        #[test]
+        fn error_decode_smallint() {
+            assert_eq!(
+                PgType::SmallInt.decode(&PgFormat::Binary, &[0, 0, 1]),
+                Err(DecodeError::NotEnoughBytes {
+                    required_bytes: 4,
+                    source: &[0, 0, 1],
+                    pg_type: PgType::SmallInt
+                })
             );
         }
 
@@ -425,10 +450,34 @@ mod tests {
         }
 
         #[test]
+        fn error_decode_integer() {
+            assert_eq!(
+                PgType::Integer.decode(&PgFormat::Binary, &[0, 0, 1]),
+                Err(DecodeError::NotEnoughBytes {
+                    required_bytes: 4,
+                    source: &[0, 0, 1],
+                    pg_type: PgType::Integer
+                })
+            );
+        }
+
+        #[test]
         fn decode_bigint() {
             assert_eq!(
                 PgType::BigInt.decode(&PgFormat::Binary, &[0, 0, 0, 0, 0, 0, 0, 1]),
                 Ok(Value::Int64(1))
+            );
+        }
+
+        #[test]
+        fn error_decode_bigint() {
+            assert_eq!(
+                PgType::BigInt.decode(&PgFormat::Binary, &[0, 0, 1]),
+                Err(DecodeError::NotEnoughBytes {
+                    required_bytes: 8,
+                    source: &[0, 0, 1],
+                    pg_type: PgType::BigInt
+                })
             );
         }
     }
@@ -437,18 +486,6 @@ mod tests {
     mod text_decoding {
         use super::*;
         use std::str::FromStr;
-
-        #[test]
-        fn error_decode_text() {
-            let non_utf_code = 0x96;
-            assert_eq!(
-                PgType::Bool.decode(&PgFormat::Text, &[non_utf_code]),
-                Err(DecodeError::CannotDecodeString {
-                    cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
-                    source: &[non_utf_code]
-                })
-            );
-        }
 
         #[test]
         fn decode_true() {
@@ -481,6 +518,18 @@ mod tests {
             assert_eq!(
                 PgType::VarChar.decode(&PgFormat::Text, b"abc"),
                 Ok(Value::String("abc".into()))
+            );
+        }
+
+        #[test]
+        fn error_decode_string() {
+            let non_utf_code = 0x96;
+            assert_eq!(
+                PgType::Char.decode(&PgFormat::Text, &[non_utf_code]),
+                Err(DecodeError::CannotDecodeString {
+                    cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
+                    source: &[non_utf_code]
+                })
             );
         }
 
