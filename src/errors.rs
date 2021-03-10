@@ -18,7 +18,7 @@ use std::{num::ParseIntError, str::Utf8Error};
 /// An error which can be returned when decoding raw bytes into [Value](crate::types::Value)s
 #[derive(Debug, PartialEq)]
 pub struct TypeValueDecodeError<'e> {
-    kind: TypeValueDecodeErrorKind<'e>
+    kind: TypeValueDecodeErrorKind<'e>,
 }
 
 impl<'e> From<TypeValueDecodeErrorKind<'e>> for TypeValueDecodeError<'e> {
@@ -51,7 +51,7 @@ pub(crate) enum TypeValueDecodeErrorKind<'e> {
 /// An error which can be returned when decoding raw bytes into [FrontendMessage](crate::messages::FrontendMessage)s
 #[derive(Debug, PartialEq)]
 pub struct PayloadError<'e> {
-    kind: PayloadErrorKind<'e>
+    kind: PayloadErrorKind<'e>,
 }
 
 impl<'e> From<PayloadErrorKind<'e>> for PayloadError<'e> {
@@ -117,8 +117,8 @@ impl From<ParseIntError> for Error {
 
 #[cfg(test)]
 mod error_conversion {
-    use std::str::FromStr;
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn from_unrecognized_format() {

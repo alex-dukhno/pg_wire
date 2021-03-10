@@ -39,7 +39,10 @@ impl<'c> Cursor<'c> {
     }
 
     fn peek_byte(&self) -> Result<u8, PayloadError<'c>> {
-        self.buf.get(0).copied().ok_or_else(|| PayloadError::from(PayloadErrorKind::ReachEndOfCursor))
+        self.buf
+            .get(0)
+            .copied()
+            .ok_or_else(|| PayloadError::from(PayloadErrorKind::ReachEndOfCursor))
     }
 
     pub(crate) fn read_byte(&mut self) -> Result<u8, PayloadError<'c>> {
@@ -66,14 +69,18 @@ impl<'c> Cursor<'c> {
     /// terminated string.
     pub(crate) fn read_cstr(&mut self) -> Result<&'c str, PayloadError<'c>> {
         if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
-            let val = str::from_utf8(&self.buf[..pos]).map_err(|cause| PayloadError::from(PayloadErrorKind::InvalidUtfString {
-                cause,
-                source: &self.buf[..pos],
-            }))?;
+            let val = str::from_utf8(&self.buf[..pos]).map_err(|cause| {
+                PayloadError::from(PayloadErrorKind::InvalidUtfString {
+                    cause,
+                    source: &self.buf[..pos],
+                })
+            })?;
             self.advance(pos + 1);
             Ok(val)
         } else {
-            Err(PayloadError::from(PayloadErrorKind::CStringNotTerminated { source: &self.buf[..] }))
+            Err(PayloadError::from(PayloadErrorKind::CStringNotTerminated {
+                source: &self.buf[..],
+            }))
         }
     }
 
@@ -86,7 +93,8 @@ impl<'c> Cursor<'c> {
     /// Reads the next 32-bit signed integer, advancing the cursor by four
     /// bytes.
     pub(crate) fn read_i32(&mut self) -> Result<i32, PayloadError<'c>> {
-        self.consume_next(4).map(|buf| i32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]))
+        self.consume_next(4)
+            .map(|buf| i32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]))
     }
 
     /// Reads the next 32-bit unsigned integer, advancing the cursor by four
@@ -111,7 +119,10 @@ mod tests {
     fn error_read_byte() {
         let buffer = vec![];
         let mut cursor = Cursor::from(buffer.as_slice());
-        assert_eq!(cursor.read_byte(), Err(PayloadError::from(PayloadErrorKind::ReachEndOfCursor)));
+        assert_eq!(
+            cursor.read_byte(),
+            Err(PayloadError::from(PayloadErrorKind::ReachEndOfCursor))
+        );
     }
 
     #[test]

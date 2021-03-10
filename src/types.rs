@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{errors::{Error, TypeValueDecodeErrorKind}, Oid, PgFormat, TypeValueDecodeError};
+use crate::{
+    errors::{Error, TypeValueDecodeErrorKind},
+    Oid, PgFormat, TypeValueDecodeError,
+};
 use std::{
     fmt::{self, Display, Formatter},
     str,
@@ -395,10 +398,12 @@ mod tests {
             let non_utf_code = 0x96;
             assert_eq!(
                 PgType::Char.decode(&PgFormat::Binary, &[non_utf_code]),
-                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotDecodeString {
-                    cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
-                    source: &[non_utf_code]
-                }))
+                Err(TypeValueDecodeError::from(
+                    TypeValueDecodeErrorKind::CannotDecodeString {
+                        cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
+                        source: &[non_utf_code]
+                    }
+                ))
             );
         }
 
@@ -483,7 +488,9 @@ mod tests {
         fn error_decode_bool() {
             assert_eq!(
                 PgType::Bool.decode(&PgFormat::Text, b"abc"),
-                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseBool { source: "abc" }))
+                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseBool {
+                    source: "abc"
+                }))
             );
         }
 
@@ -508,10 +515,12 @@ mod tests {
             let non_utf_code = 0x96;
             assert_eq!(
                 PgType::Char.decode(&PgFormat::Text, &[non_utf_code]),
-                Err(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotDecodeString {
-                    cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
-                    source: &[non_utf_code]
-                }))
+                Err(TypeValueDecodeError::from(
+                    TypeValueDecodeErrorKind::CannotDecodeString {
+                        cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
+                        source: &[non_utf_code]
+                    }
+                ))
             );
         }
 

@@ -15,7 +15,7 @@
 #![warn(missing_docs)]
 //! API for backend implementation of PostgreSQL Wire Protocol
 
-pub use errors::{Error, TypeValueDecodeError, PayloadError};
+pub use errors::{Error, PayloadError, TypeValueDecodeError};
 pub use format::PgFormat;
 pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
