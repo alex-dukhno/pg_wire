@@ -15,7 +15,7 @@
 use crate::{format::UnrecognizedFormat, request_codes::Code, Oid, PgType};
 use std::{num::ParseIntError, str::Utf8Error};
 
-/// An error which can be returned when decoding raw bytes into [Value](crate::types::Value)
+/// An error which can be returned when decoding raw bytes into [Value](crate::types::Value)s
 #[derive(Debug, PartialEq)]
 pub struct TypeValueDecodeError<'e> {
     kind: TypeValueDecodeErrorKind<'e>
@@ -48,7 +48,7 @@ pub(crate) enum TypeValueDecodeErrorKind<'e> {
     },
 }
 
-/// An error which can be returned when decoding raw bytes into [crate::messages::FrontendMessage]s
+/// An error which can be returned when decoding raw bytes into [FrontendMessage](crate::messages::FrontendMessage)s
 #[derive(Debug, PartialEq)]
 pub struct PayloadError<'e> {
     kind: PayloadErrorKind<'e>
@@ -99,8 +99,6 @@ pub enum Error {
     UnsupportedVersion(Code),
     /// Indicates that client request is not supported
     UnsupportedRequest(Code),
-    /// Indicates that during handshake client sent unrecognized protocol version
-    UnrecognizedVersion,
     /// Indicates that connection verification is failed
     VerificationFailed,
 }
