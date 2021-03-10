@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use crate::{format::UnrecognizedFormat, request_codes::Code, Oid, PgType};
-use std::{num::ParseIntError, str::Utf8Error};
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    num::ParseIntError,
+    str::Utf8Error,
+};
 
 /// An error which can be returned when decoding raw bytes into [Value](crate::types::Value)s
 #[derive(Debug, PartialEq)]
@@ -52,14 +55,31 @@ pub(crate) enum TypeValueDecodeErrorKind<'e> {
 impl<'e> Display for TypeValueDecodeError<'e> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            TypeValueDecodeErrorKind::NotEnoughBytes { required_bytes, source, pg_type } =>
-                write!(f, "{} type can not be decoded. Its size is {} bytes. Buffer content {:?}", pg_type, required_bytes, source),
+            TypeValueDecodeErrorKind::NotEnoughBytes {
+                required_bytes,
+                source,
+                pg_type,
+            } => write!(
+                f,
+                "{} type can not be decoded. Its size is {} bytes. Buffer content {:?}",
+                pg_type, required_bytes, source
+            ),
             TypeValueDecodeErrorKind::CannotDecodeString { cause, source } => {
-                write!(f, "UTF-8 string can not be decoded from {:?}. The cause: \"{}\"", source, cause)
+                write!(
+                    f,
+                    "UTF-8 string can not be decoded from {:?}. The cause: \"{}\"",
+                    source, cause
+                )
             }
-            TypeValueDecodeErrorKind::CannotParseBool { source } => { write!(f, "bool type can not be decoded from '{}'", source)}
+            TypeValueDecodeErrorKind::CannotParseBool { source } => {
+                write!(f, "bool type can not be decoded from '{}'", source)
+            }
             TypeValueDecodeErrorKind::CannotParseInt { cause, source, pg_type } => {
-                write!(f, "{} type can not be parsed from '{}'. The cause: \"{}\"", pg_type, source, cause)
+                write!(
+                    f,
+                    "{} type can not be parsed from '{}'. The cause: \"{}\"",
+                    pg_type, source, cause
+                )
             }
         }
     }
@@ -84,10 +104,22 @@ impl<'e> Display for PayloadError<'e> {
                 write!(f, "{:?} is invalid UTF-8 string. The cause: \"{}\"", source, cause)
             }
             PayloadErrorKind::CStringNotTerminated { source } => {
-                write!(f, "Buffer does not contain \\0 termination byte. Buffer content {:?}", source)
+                write!(
+                    f,
+                    "Buffer does not contain \\0 termination byte. Buffer content {:?}",
+                    source
+                )
             }
-            PayloadErrorKind::EndOfBuffer => {  write!(f, "End of Payload Buffer") }
-            PayloadErrorKind::NotEnoughBytes { required, source } => {write!(f, "Buffer does not contain required number of bytes. Bytes required {}, buffer content {:?}", required, source)}
+            PayloadErrorKind::EndOfBuffer => {
+                write!(f, "End of Payload Buffer")
+            }
+            PayloadErrorKind::NotEnoughBytes { required, source } => {
+                write!(
+                    f,
+                    "Buffer does not contain required number of bytes. Bytes required {}, buffer content {:?}",
+                    required, source
+                )
+            }
         }
     }
 }
@@ -187,7 +219,10 @@ mod tests {
 
         #[test]
         fn end_of_buffer() {
-            assert_eq!(PayloadError::from(PayloadErrorKind::EndOfBuffer).to_string(), "End of Payload Buffer")
+            assert_eq!(
+                PayloadError::from(PayloadErrorKind::EndOfBuffer).to_string(),
+                "End of Payload Buffer"
+            )
         }
 
         #[test]
@@ -197,7 +232,9 @@ mod tests {
                 PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                     required: 4,
                     source: &buffer
-                }).to_string(), "Buffer does not contain required number of bytes. Bytes required 4, buffer content [0, 123]"
+                })
+                .to_string(),
+                "Buffer does not contain required number of bytes. Bytes required 4, buffer content [0, 123]"
             );
         }
     }
@@ -205,16 +242,19 @@ mod tests {
     #[cfg(test)]
     mod type_value_decode_error {
         use super::*;
-        use std::str;
-        use std::str::FromStr;
+        use std::{str, str::FromStr};
 
         #[test]
         fn not_enough_bytes() {
-            assert_eq!(TypeValueDecodeError::from(TypeValueDecodeErrorKind::NotEnoughBytes {
-                required_bytes: 8,
-                source: &[0, 0, 1],
-                pg_type: PgType::BigInt
-            }).to_string(), "bigint type can not be decoded. Its size is 8 bytes. Buffer content [0, 0, 1]")
+            assert_eq!(
+                TypeValueDecodeError::from(TypeValueDecodeErrorKind::NotEnoughBytes {
+                    required_bytes: 8,
+                    source: &[0, 0, 1],
+                    pg_type: PgType::BigInt
+                })
+                .to_string(),
+                "bigint type can not be decoded. Its size is 8 bytes. Buffer content [0, 0, 1]"
+            )
         }
 
         #[test]
@@ -230,18 +270,23 @@ mod tests {
 
         #[test]
         fn can_not_parse_bool() {
-            assert_eq!(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseBool {
-                source: "abc"
-            }).to_string(), "bool type can not be decoded from 'abc'")
+            assert_eq!(
+                TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseBool { source: "abc" }).to_string(),
+                "bool type can not be decoded from 'abc'"
+            )
         }
 
         #[test]
         fn can_not_parse_integer() {
-            assert_eq!(TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseInt {
-                cause: i32::from_str("1.0").unwrap_err(),
-                source: &"1.0",
-                pg_type: PgType::Integer
-            }).to_string(), "integer type can not be parsed from \'1.0\'. The cause: \"invalid digit found in string\"")
+            assert_eq!(
+                TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseInt {
+                    cause: i32::from_str("1.0").unwrap_err(),
+                    source: &"1.0",
+                    pg_type: PgType::Integer
+                })
+                .to_string(),
+                "integer type can not be parsed from \'1.0\'. The cause: \"invalid digit found in string\""
+            )
         }
     }
 }
