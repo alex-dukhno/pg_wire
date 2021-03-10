@@ -42,7 +42,7 @@ impl<'c> Cursor<'c> {
         self.buf
             .get(0)
             .copied()
-            .ok_or_else(|| PayloadError::from(PayloadErrorKind::ReachEndOfCursor))
+            .ok_or_else(|| PayloadError::from(PayloadErrorKind::EndOfBuffer))
     }
 
     pub(crate) fn read_byte(&mut self) -> Result<u8, PayloadError<'c>> {
@@ -55,7 +55,7 @@ impl<'c> Cursor<'c> {
         if self.buf.len() < size {
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: size as u8,
-                bytes_left: self.buf,
+                source: self.buf,
             }))
         } else {
             let buf = &self.buf[0..size];
@@ -121,7 +121,7 @@ mod tests {
         let mut cursor = Cursor::from(buffer.as_slice());
         assert_eq!(
             cursor.read_byte(),
-            Err(PayloadError::from(PayloadErrorKind::ReachEndOfCursor))
+            Err(PayloadError::from(PayloadErrorKind::EndOfBuffer))
         );
     }
 
@@ -175,7 +175,7 @@ mod tests {
             cursor.read_i16(),
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: 2,
-                bytes_left: &buffer
+                source: &buffer
             }))
         );
     }
@@ -195,7 +195,7 @@ mod tests {
             cursor.read_i32(),
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: 4,
-                bytes_left: &buffer
+                source: &buffer
             }))
         );
     }
@@ -215,7 +215,7 @@ mod tests {
             cursor.read_u32(),
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: 4,
-                bytes_left: &buffer
+                source: &buffer
             }))
         );
     }
