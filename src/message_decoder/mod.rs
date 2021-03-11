@@ -98,7 +98,7 @@ impl MessageDecoder {
     }
 
     fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, Error> {
-        log::trace!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
+        log::debug!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
 
         let mut cursor = Cursor::from(buffer);
         match tag {
