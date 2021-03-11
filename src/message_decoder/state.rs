@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cursor::Cursor, Error};
+use crate::{Error, PayloadError};
+use crate::errors::PayloadErrorKind;
 
 trait Transform<C> {
-    fn transform(self, buf: &mut Cursor) -> Result<C, Error>;
+    fn transform(self, buf: &[u8]) -> Result<C, Error>;
 }
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Created;
 
 impl<'c> Transform<RequestingTag> for &'c Created {
-    fn transform(self, _buf: &mut Cursor) -> Result<RequestingTag, Error> {
+    fn transform(self, _buf: &[u8]) -> Result<RequestingTag, Error> {
         Ok(RequestingTag)
     }
 }
@@ -31,8 +32,12 @@ impl<'c> Transform<RequestingTag> for &'c Created {
 pub(crate) struct RequestingTag;
 
 impl<'rt> Transform<Tag> for &'rt RequestingTag {
-    fn transform(self, buf: &mut Cursor) -> Result<Tag, Error> {
-        Ok(Tag(buf.read_byte()?))
+    fn transform(self, buf: &[u8]) -> Result<Tag, Error> {
+        if buf.is_empty() {
+            Err(Err(PayloadError::from(PayloadErrorKind::EndOfBuffer))?)
+        } else {
+            Ok(Tag(buf[0]))
+        }
     }
 }
 
@@ -40,7 +45,7 @@ impl<'rt> Transform<Tag> for &'rt RequestingTag {
 pub(crate) struct Tag(pub(crate) u8);
 
 impl<'t> Transform<WaitingForPayload> for &'t Tag {
-    fn transform(self, _buf: &mut Cursor) -> Result<WaitingForPayload, Error> {
+    fn transform(self, _buf: &[u8]) -> Result<WaitingForPayload, Error> {
         Ok(WaitingForPayload)
     }
 }
@@ -49,8 +54,8 @@ impl<'t> Transform<WaitingForPayload> for &'t Tag {
 pub(crate) struct WaitingForPayload;
 
 impl<'w> Transform<Payload> for &'w WaitingForPayload {
-    fn transform(self, buf: &mut Cursor) -> Result<Payload, Error> {
-        Ok(Payload(Vec::from(&*buf)))
+    fn transform(self, buf: &[u8]) -> Result<Payload, Error> {
+        Ok(Payload(buf.to_vec()))
     }
 }
 
@@ -58,7 +63,7 @@ impl<'w> Transform<Payload> for &'w WaitingForPayload {
 pub(crate) struct Payload(pub(crate) Vec<u8>);
 
 impl<'p> Transform<Created> for &'p Payload {
-    fn transform(self, _buf: &mut Cursor) -> Result<Created, Error> {
+    fn transform(self, _buf: &[u8]) -> Result<Created, Error> {
         Ok(Created)
     }
 }
@@ -77,14 +82,14 @@ impl State {
         State::Created(Created)
     }
 
-    pub(crate) fn try_step(self, buf: &[u8]) -> Result<(State, State), Error> {
-        let mut cursor = Cursor::from(buf);
+    pub(crate) fn transit_to_next(self, buf: &[u8]) -> Result<(State, State), Error> {
+        // let mut cursor = Cursor::from(buf);
         match &self {
-            State::Created(created) => Ok((State::RequestingTag(created.transform(&mut cursor)?), self)),
-            State::RequestingTag(rt) => Ok((State::Tag(rt.transform(&mut cursor)?), self)),
-            State::Tag(tag) => Ok((State::WaitingForPayload(tag.transform(&mut cursor)?), self)),
-            State::WaitingForPayload(w) => Ok((State::Payload(w.transform(&mut cursor)?), self)),
-            State::Payload(decoded) => Ok((State::Created(decoded.transform(&mut cursor)?), self)),
+            State::Created(created) => Ok((State::RequestingTag(created.transform(buf)?), self)),
+            State::RequestingTag(rt) => Ok((State::Tag(rt.transform(buf)?), self)),
+            State::Tag(tag) => Ok((State::WaitingForPayload(tag.transform(buf)?), self)),
+            State::WaitingForPayload(w) => Ok((State::Payload(w.transform(buf)?), self)),
+            State::Payload(decoded) => Ok((State::Created(decoded.transform(buf)?), self)),
         }
     }
 }
@@ -106,7 +111,7 @@ mod tests {
         let state = State::new();
 
         assert_eq!(
-            state.try_step(&[]),
+            state.transit_to_next(&[]),
             Ok((State::RequestingTag(RequestingTag), State::new()))
         );
     }
@@ -115,10 +120,10 @@ mod tests {
     fn parse_tag() {
         let state = State::new();
 
-        let (state, _prev) = state.try_step(&[]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[]).expect("proceed to the next step");
 
         assert_eq!(
-            state.try_step(&[QUERY]),
+            state.transit_to_next(&[QUERY]),
             Ok((State::Tag(Tag(QUERY)), State::RequestingTag(RequestingTag)))
         );
     }
@@ -127,11 +132,11 @@ mod tests {
     fn decoding_body() {
         let state = State::new();
 
-        let (state, _prev) = state.try_step(&[]).expect("proceed to the next step");
-        let (state, _prev) = state.try_step(&[QUERY]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[QUERY]).expect("proceed to the next step");
 
         assert_eq!(
-            state.try_step(&[]),
+            state.transit_to_next(&[]),
             Ok((State::WaitingForPayload(WaitingForPayload), State::Tag(Tag(QUERY))))
         );
     }
@@ -140,12 +145,12 @@ mod tests {
     fn read_body() {
         let state = State::new();
 
-        let (state, _prev) = state.try_step(&[]).expect("proceed to the next step");
-        let (state, _prev) = state.try_step(&[QUERY]).expect("proceed to the next step");
-        let (state, _prev) = state.try_step(&[]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[QUERY]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[]).expect("proceed to the next step");
 
         assert_eq!(
-            state.try_step(QUERY_STRING),
+            state.transit_to_next(QUERY_STRING),
             Ok((
                 State::Payload(Payload(QUERY_STRING.to_vec())),
                 State::WaitingForPayload(WaitingForPayload)
@@ -157,13 +162,13 @@ mod tests {
     fn full_cycle() {
         let state = State::new();
 
-        let (state, _prev) = state.try_step(&[]).expect("proceed to the next step");
-        let (state, _prev) = state.try_step(&[QUERY]).expect("proceed to the next step");
-        let (state, _prev) = state.try_step(&[]).expect("proceed to the next step");
-        let (state, _prev) = state.try_step(QUERY_STRING).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[QUERY]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(&[]).expect("proceed to the next step");
+        let (state, _prev) = state.transit_to_next(QUERY_STRING).expect("proceed to the next step");
 
         assert_eq!(
-            state.try_step(&[]),
+            state.transit_to_next(&[]),
             Ok((State::Created(Created), State::Payload(Payload(QUERY_STRING.to_vec()))))
         );
     }

@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cursor::Cursor, types::PgType, ConnId, ConnSecretKey, Error, PgFormat};
-use std::convert::TryFrom;
+use crate::{types::PgType, ConnId, ConnSecretKey, PgFormat};
 
 const COMMAND_COMPLETE: u8 = b'C';
 const DATA_ROW: u8 = b'D';
@@ -35,14 +34,14 @@ const BIND_COMPLETE: u8 = b'2';
 const CLOSE_COMPLETE: u8 = b'3';
 
 pub(crate) const QUERY: u8 = b'Q';
-const BIND: u8 = b'B';
-const CLOSE: u8 = b'C';
-const DESCRIBE: u8 = b'D';
-const EXECUTE: u8 = b'E';
-const FLUSH: u8 = b'H';
-const PARSE: u8 = b'P';
-const SYNC: u8 = b'S';
-const TERMINATE: u8 = b'X';
+pub(crate) const BIND: u8 = b'B';
+pub(crate) const CLOSE: u8 = b'C';
+pub(crate) const DESCRIBE: u8 = b'D';
+pub(crate) const EXECUTE: u8 = b'E';
+pub(crate) const FLUSH: u8 = b'H';
+pub(crate) const PARSE: u8 = b'P';
+pub(crate) const SYNC: u8 = b'S';
+pub(crate) const TERMINATE: u8 = b'X';
 
 /// Frontend PostgreSQL Wire Protocol messages
 /// see [Protocol Flow](https://www.postgresql.org/docs/current/protocol-flow.html)
@@ -154,36 +153,6 @@ pub enum FrontendMessage {
 
     /// Terminate a connection.
     Terminate,
-}
-
-impl FrontendMessage {
-    /// decodes buffer data to a frontend message
-    pub fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, Error> {
-        log::trace!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
-
-        let cursor = Cursor::from(buffer);
-        match tag {
-            // Simple query flow.
-            QUERY => decode_query(cursor),
-
-            // Extended query flow.
-            BIND => decode_bind(cursor),
-            CLOSE => decode_close(cursor),
-            DESCRIBE => decode_describe(cursor),
-            EXECUTE => decode_execute(cursor),
-            FLUSH => Ok(FrontendMessage::Flush),
-            PARSE => decode_parse(cursor),
-            SYNC => Ok(FrontendMessage::Sync),
-
-            TERMINATE => Ok(FrontendMessage::Terminate),
-
-            // Invalid.
-            _ => {
-                log::error!("unsupported frontend message tag {}", tag);
-                Err(Error::UnsupportedFrontendMessage)
-            }
-        }
-    }
 }
 
 /// Backend PostgreSQL Wire Protocol messages
@@ -381,239 +350,6 @@ impl ColumnMetadata {
             type_id: pg_type.type_oid(),
             type_size: pg_type.type_len(),
         }
-    }
-}
-
-fn decode_bind(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
-    let portal_name = cursor.read_cstr()?.to_owned();
-    let statement_name = cursor.read_cstr()?.to_owned();
-
-    let mut param_formats = vec![];
-    for _ in 0..cursor.read_i16()? {
-        param_formats.push(decode_format(&mut cursor)?);
-    }
-
-    let mut raw_params = vec![];
-    for _ in 0..cursor.read_i16()? {
-        let len = cursor.read_i32()?;
-        if len == -1 {
-            // As a special case, -1 indicates a NULL parameter value.
-            raw_params.push(None);
-        } else {
-            let mut value = vec![];
-            for _ in 0..len {
-                value.push(cursor.read_byte()?);
-            }
-            raw_params.push(Some(value));
-        }
-    }
-
-    let mut result_formats = vec![];
-    for _ in 0..cursor.read_i16()? {
-        result_formats.push(decode_format(&mut cursor)?);
-    }
-
-    Ok(FrontendMessage::Bind {
-        portal_name,
-        statement_name,
-        param_formats,
-        raw_params,
-        result_formats,
-    })
-}
-
-fn decode_format(cursor: &mut Cursor) -> Result<PgFormat, Error> {
-    PgFormat::try_from(cursor.read_i16()?).map_err(Into::into)
-}
-
-fn decode_close(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
-    let first_char = cursor.read_byte()?;
-    let name = cursor.read_cstr()?.to_owned();
-    match first_char {
-        b'P' => Ok(FrontendMessage::ClosePortal { name }),
-        b'S' => Ok(FrontendMessage::CloseStatement { name }),
-        other => Err(Error::InvalidInput(format!(
-            "invalid type byte in Close frontend message: {:?}",
-            char::from(other),
-        ))),
-    }
-}
-
-fn decode_describe(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
-    let first_char = cursor.read_byte()?;
-    let name = cursor.read_cstr()?.to_owned();
-    match first_char {
-        b'P' => Ok(FrontendMessage::DescribePortal { name }),
-        b'S' => Ok(FrontendMessage::DescribeStatement { name }),
-        other => Err(Error::InvalidInput(format!(
-            "invalid type byte in Describe frontend message: {:?}",
-            char::from(other),
-        ))),
-    }
-}
-
-fn decode_execute(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
-    let portal_name = cursor.read_cstr()?.to_owned();
-    let max_rows = cursor.read_i32()?;
-    Ok(FrontendMessage::Execute { portal_name, max_rows })
-}
-
-fn decode_parse(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
-    let statement_name = cursor.read_cstr()?.to_owned();
-    let sql = cursor.read_cstr()?.to_owned();
-
-    let mut param_types = vec![];
-    for _ in 0..cursor.read_i16()? {
-        let pg_type = PgType::from_oid(cursor.read_u32()?)?;
-        log::trace!("received parameter of {:?} PostgreSQL Type", pg_type);
-        param_types.push(pg_type);
-    }
-
-    Ok(FrontendMessage::Parse {
-        statement_name,
-        sql,
-        param_types,
-    })
-}
-
-fn decode_query(mut cursor: Cursor) -> Result<FrontendMessage, Error> {
-    let sql = cursor.read_cstr()?.to_owned();
-    Ok(FrontendMessage::Query { sql })
-}
-
-#[cfg(test)]
-mod decoding_frontend_messages {
-    use super::*;
-
-    #[test]
-    fn query() {
-        let buffer = [
-            99, 114, 101, 97, 116, 101, 32, 115, 99, 104, 101, 109, 97, 32, 115, 99, 104, 101, 109, 97, 95, 110, 97,
-            109, 101, 59, 0,
-        ];
-        let message = FrontendMessage::decode(b'Q', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::Query {
-                sql: "create schema schema_name;".to_owned()
-            })
-        );
-    }
-
-    #[test]
-    fn bind() {
-        let buffer = [
-            112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110,
-            97, 109, 101, 0, 0, 2, 0, 1, 0, 1, 0, 2, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2, 0, 0,
-        ];
-        let message = FrontendMessage::decode(b'B', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::Bind {
-                portal_name: "portal_name".to_owned(),
-                statement_name: "statement_name".to_owned(),
-                param_formats: vec![PgFormat::Binary, PgFormat::Binary],
-                raw_params: vec![Some(vec![0, 0, 0, 1]), Some(vec![0, 0, 0, 2])],
-                result_formats: vec![],
-            })
-        );
-    }
-
-    #[test]
-    fn close_portal() {
-        let buffer = [80, 112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0];
-        let message = FrontendMessage::decode(b'C', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::ClosePortal {
-                name: "portal_name".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn close_statement() {
-        let buffer = [83, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110, 97, 109, 101, 0];
-        let message = FrontendMessage::decode(b'C', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::CloseStatement {
-                name: "statement_name".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn describe_portal() {
-        let buffer = [80, 112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0];
-        let message = FrontendMessage::decode(b'D', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::DescribePortal {
-                name: "portal_name".to_owned()
-            })
-        );
-    }
-
-    #[test]
-    fn describe_statement() {
-        let buffer = [83, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110, 97, 109, 101, 0];
-        let message = FrontendMessage::decode(b'D', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::DescribeStatement {
-                name: "statement_name".to_owned()
-            })
-        );
-    }
-
-    #[test]
-    fn execute() {
-        let buffer = [112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0, 0, 0, 0, 0];
-        let message = FrontendMessage::decode(b'E', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::Execute {
-                portal_name: "portal_name".to_owned(),
-                max_rows: 0,
-            })
-        );
-    }
-
-    #[test]
-    fn flush() {
-        let message = FrontendMessage::decode(b'H', &[]);
-        assert_eq!(message, Ok(FrontendMessage::Flush));
-    }
-
-    #[test]
-    fn parse() {
-        let buffer = [
-            0, 115, 101, 108, 101, 99, 116, 32, 42, 32, 102, 114, 111, 109, 32, 115, 99, 104, 101, 109, 97, 95, 110,
-            97, 109, 101, 46, 116, 97, 98, 108, 101, 95, 110, 97, 109, 101, 32, 119, 104, 101, 114, 101, 32, 115, 105,
-            95, 99, 111, 108, 117, 109, 110, 32, 61, 32, 36, 49, 59, 0, 0, 1, 0, 0, 0, 23,
-        ];
-        let message = FrontendMessage::decode(b'P', &buffer);
-        assert_eq!(
-            message,
-            Ok(FrontendMessage::Parse {
-                statement_name: "".to_owned(),
-                sql: "select * from schema_name.table_name where si_column = $1;".to_owned(),
-                param_types: vec![Some(PgType::Integer)],
-            })
-        );
-    }
-
-    #[test]
-    fn sync() {
-        let message = FrontendMessage::decode(b'S', &[]);
-        assert_eq!(message, Ok(FrontendMessage::Sync));
-    }
-
-    #[test]
-    fn terminate() {
-        let message = FrontendMessage::decode(b'X', &[]);
-        assert_eq!(message, Ok(FrontendMessage::Terminate));
     }
 }
 
