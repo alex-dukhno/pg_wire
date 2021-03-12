@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Error, PayloadError};
-use crate::errors::PayloadErrorKind;
+use crate::{errors::PayloadErrorKind, Error, PayloadError};
 
 trait Transform<C> {
-    fn transform(self, buf: &[u8]) -> Result<C, Error>;
+    fn transform(self, buf: &[u8]) -> Result<C, PayloadError>;
 }
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Created;
 
 impl<'c> Transform<RequestingTag> for &'c Created {
-    fn transform(self, _buf: &[u8]) -> Result<RequestingTag, Error> {
+    fn transform(self, _buf: &[u8]) -> Result<RequestingTag, PayloadError> {
         Ok(RequestingTag)
     }
 }
@@ -32,9 +31,9 @@ impl<'c> Transform<RequestingTag> for &'c Created {
 pub(crate) struct RequestingTag;
 
 impl<'rt> Transform<Tag> for &'rt RequestingTag {
-    fn transform(self, buf: &[u8]) -> Result<Tag, Error> {
+    fn transform(self, buf: &[u8]) -> Result<Tag, PayloadError> {
         if buf.is_empty() {
-            Err(Err(PayloadError::from(PayloadErrorKind::EndOfBuffer))?)
+            Err(PayloadError::from(PayloadErrorKind::EndOfBuffer))
         } else {
             Ok(Tag(buf[0]))
         }
@@ -45,7 +44,7 @@ impl<'rt> Transform<Tag> for &'rt RequestingTag {
 pub(crate) struct Tag(pub(crate) u8);
 
 impl<'t> Transform<WaitingForPayload> for &'t Tag {
-    fn transform(self, _buf: &[u8]) -> Result<WaitingForPayload, Error> {
+    fn transform(self, _buf: &[u8]) -> Result<WaitingForPayload, PayloadError> {
         Ok(WaitingForPayload)
     }
 }
@@ -54,7 +53,7 @@ impl<'t> Transform<WaitingForPayload> for &'t Tag {
 pub(crate) struct WaitingForPayload;
 
 impl<'w> Transform<Payload> for &'w WaitingForPayload {
-    fn transform(self, buf: &[u8]) -> Result<Payload, Error> {
+    fn transform(self, buf: &[u8]) -> Result<Payload, PayloadError> {
         Ok(Payload(buf.to_vec()))
     }
 }
@@ -63,7 +62,7 @@ impl<'w> Transform<Payload> for &'w WaitingForPayload {
 pub(crate) struct Payload(pub(crate) Vec<u8>);
 
 impl<'p> Transform<Created> for &'p Payload {
-    fn transform(self, _buf: &[u8]) -> Result<Created, Error> {
+    fn transform(self, _buf: &[u8]) -> Result<Created, PayloadError> {
         Ok(Created)
     }
 }
@@ -83,7 +82,6 @@ impl State {
     }
 
     pub(crate) fn transit_to_next(self, buf: &[u8]) -> Result<(State, State), Error> {
-        // let mut cursor = Cursor::from(buf);
         match &self {
             State::Created(created) => Ok((State::RequestingTag(created.transform(buf)?), self)),
             State::RequestingTag(rt) => Ok((State::Tag(rt.transform(buf)?), self)),

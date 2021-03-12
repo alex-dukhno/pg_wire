@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cursor::Cursor, errors::Error, message_decoder::state::{Payload, Tag}, messages::FrontendMessage, PgFormat, PgType};
+use crate::{
+    cursor::Cursor,
+    errors::Error,
+    message_decoder::state::{Payload, Tag},
+    messages::{FrontendMessage, BIND, CLOSE, DESCRIBE, EXECUTE, FLUSH, PARSE, QUERY, SYNC, TERMINATE},
+    PgFormat, PgType,
+};
 use state::State;
-use std::mem::{self, MaybeUninit};
-use crate::messages::{QUERY, SYNC, BIND, CLOSE, DESCRIBE, EXECUTE, FLUSH, PARSE, TERMINATE};
-use std::convert::TryFrom;
+use std::{
+    convert::TryFrom,
+    mem::{self, MaybeUninit},
+};
 
 mod state;
 
@@ -115,10 +122,7 @@ impl MessageDecoder {
 
                 let mut param_formats = vec![];
                 for _ in 0..cursor.read_i16()? {
-                    match PgFormat::try_from(cursor.read_i16()?) {
-                        Ok(format) => param_formats.push(format),
-                        Err(error) => return Err(error.into()),
-                    }
+                    param_formats.push(PgFormat::try_from(cursor.read_i16()?)?)
                 }
 
                 let mut raw_params = vec![];
@@ -138,10 +142,7 @@ impl MessageDecoder {
 
                 let mut result_formats = vec![];
                 for _ in 0..cursor.read_i16()? {
-                    match PgFormat::try_from(cursor.read_i16()?) {
-                        Ok(format) => result_formats.push(format),
-                        Err(error) => return Err(error.into()),
-                    }
+                    result_formats.push(PgFormat::try_from(cursor.read_i16()?)?)
                 }
 
                 Ok(FrontendMessage::Bind {
@@ -321,13 +322,11 @@ mod tests {
                 .expect("proceed to the next stage");
 
             let buffer = [
-                99, 114, 101, 97, 116, 101, 32, 115, 99, 104, 101, 109, 97, 32, 115, 99, 104, 101, 109, 97, 95, 110, 97,
-                109, 101, 59, 0,
+                99, 114, 101, 97, 116, 101, 32, 115, 99, 104, 101, 109, 97, 32, 115, 99, 104, 101, 109, 97, 95, 110,
+                97, 109, 101, 59, 0,
             ];
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -340,8 +339,8 @@ mod tests {
         #[test]
         fn bind() {
             let buffer = [
-                112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110,
-                97, 109, 101, 0, 0, 2, 0, 1, 0, 1, 0, 2, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2, 0, 0,
+                112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95,
+                110, 97, 109, 101, 0, 0, 2, 0, 1, 0, 1, 0, 2, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2, 0, 0,
             ];
 
             let mut decoder = MessageDecoder::default();
@@ -352,9 +351,7 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -380,9 +377,7 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -403,9 +398,7 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -421,14 +414,14 @@ mod tests {
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
-            decoder.next_stage(Some(&[DESCRIBE])).expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&[DESCRIBE]))
+                .expect("proceed to the next stage");
             decoder
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -444,14 +437,14 @@ mod tests {
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
-            decoder.next_stage(Some(&[DESCRIBE])).expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&[DESCRIBE]))
+                .expect("proceed to the next stage");
             decoder
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -472,9 +465,7 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -496,22 +487,17 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
-            assert_eq!(
-                decoder.next_stage(None),
-                Ok(Status::Done(FrontendMessage::Flush))
-            );
+            assert_eq!(decoder.next_stage(None), Ok(Status::Done(FrontendMessage::Flush)));
         }
 
         #[test]
         fn parse() {
             let buffer = [
-                0, 115, 101, 108, 101, 99, 116, 32, 42, 32, 102, 114, 111, 109, 32, 115, 99, 104, 101, 109, 97, 95, 110,
-                97, 109, 101, 46, 116, 97, 98, 108, 101, 95, 110, 97, 109, 101, 32, 119, 104, 101, 114, 101, 32, 115, 105,
-                95, 99, 111, 108, 117, 109, 110, 32, 61, 32, 36, 49, 59, 0, 0, 1, 0, 0, 0, 23,
+                0, 115, 101, 108, 101, 99, 116, 32, 42, 32, 102, 114, 111, 109, 32, 115, 99, 104, 101, 109, 97, 95,
+                110, 97, 109, 101, 46, 116, 97, 98, 108, 101, 95, 110, 97, 109, 101, 32, 119, 104, 101, 114, 101, 32,
+                115, 105, 95, 99, 111, 108, 117, 109, 110, 32, 61, 32, 36, 49, 59, 0, 0, 1, 0, 0, 0, 23,
             ];
 
             let mut decoder = MessageDecoder::default();
@@ -522,9 +508,7 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(None),
@@ -548,14 +532,9 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
-            assert_eq!(
-                decoder.next_stage(None),
-                Ok(Status::Done(FrontendMessage::Sync))
-            );
+            assert_eq!(decoder.next_stage(None), Ok(Status::Done(FrontendMessage::Sync)));
         }
 
         #[test]
@@ -565,19 +544,16 @@ mod tests {
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
-            decoder.next_stage(Some(&[TERMINATE])).expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&[TERMINATE]))
+                .expect("proceed to the next stage");
             decoder
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder
-                .next_stage(Some(&buffer))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
 
-            assert_eq!(
-                decoder.next_stage(None),
-                Ok(Status::Done(FrontendMessage::Terminate))
-            );
+            assert_eq!(decoder.next_stage(None), Ok(Status::Done(FrontendMessage::Terminate)));
         }
     }
 }
