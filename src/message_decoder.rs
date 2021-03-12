@@ -14,13 +14,11 @@
 
 use crate::{
     cursor::Cursor,
+    errors::{MessageFormatError, MessageFormatErrorKind},
     messages::{FrontendMessage, BIND, CLOSE, DESCRIBE, EXECUTE, FLUSH, PARSE, QUERY, SYNC, TERMINATE},
     PgFormat, PgType,
 };
-use std::{
-    convert::TryFrom,
-};
-use crate::errors::{PayloadErrorKind, PayloadError, MessageFormatErrorKind, MessageFormatError};
+use std::convert::TryFrom;
 
 /// Represents a status of a `MessageDecoder` stage
 #[derive(Debug, PartialEq)]
@@ -78,20 +76,20 @@ impl MessageDecoder {
             None => {
                 self.state = Some(State::RequestingTag);
                 Ok(Status::Requesting(1))
-            },
+            }
             Some(State::RequestingTag) => {
                 if buf.is_empty() {
-                    return Err(Err(PayloadError::from(PayloadErrorKind::EndOfBuffer))?)
+                    Err(MessageFormatError::from(MessageFormatErrorKind::MissingMessageTag))
                 } else {
                     self.state = Some(State::Tag(buf[0]));
                     Ok(Status::Requesting(4))
                 }
-            },
+            }
             Some(State::Tag(tag)) => {
                 self.tag = tag;
                 self.state = Some(State::WaitingForPayload);
                 Ok(Status::Requesting((Cursor::from(buf).read_i32()? - 4) as usize))
-            },
+            }
             Some(State::WaitingForPayload) => {
                 let message = Self::decode(self.tag, buf)?;
                 Ok(Status::Done(message))
@@ -154,7 +152,9 @@ impl MessageDecoder {
                 match first_char {
                     b'P' => Ok(FrontendMessage::ClosePortal { name }),
                     b'S' => Ok(FrontendMessage::CloseStatement { name }),
-                    other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(char::from(other)))),
+                    other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(
+                        char::from(other),
+                    ))),
                 }
             }
             DESCRIBE => {
@@ -163,7 +163,9 @@ impl MessageDecoder {
                 match first_char {
                     b'P' => Ok(FrontendMessage::DescribePortal { name }),
                     b'S' => Ok(FrontendMessage::DescribeStatement { name }),
-                    other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(char::from(other)))),
+                    other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(
+                        char::from(other),
+                    ))),
                 }
             }
             EXECUTE => {
@@ -193,9 +195,9 @@ impl MessageDecoder {
 
             TERMINATE => Ok(FrontendMessage::Terminate),
 
-            _ => {
-                Err(MessageFormatError::from(MessageFormatErrorKind::UnsupportedFrontendMessage(char::from(tag))))
-            }
+            _ => Err(MessageFormatError::from(
+                MessageFormatErrorKind::UnsupportedFrontendMessage(char::from(tag)),
+            )),
         }
     }
 }
@@ -249,9 +251,12 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            assert_eq!(decoder.next_stage(Some(QUERY_BYTES)), Ok(Status::Done(FrontendMessage::Query {
-                sql: "select * from t".to_owned()
-            })));
+            assert_eq!(
+                decoder.next_stage(Some(QUERY_BYTES)),
+                Ok(Status::Done(FrontendMessage::Query {
+                    sql: "select * from t".to_owned()
+                }))
+            );
         }
 
         #[test]
@@ -435,7 +440,10 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            assert_eq!(decoder.next_stage(Some(&buffer)), Ok(Status::Done(FrontendMessage::Flush)));
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Ok(Status::Done(FrontendMessage::Flush))
+            );
         }
 
         #[test]
@@ -474,7 +482,10 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            assert_eq!(decoder.next_stage(Some(&buffer)), Ok(Status::Done(FrontendMessage::Sync)));
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Ok(Status::Done(FrontendMessage::Sync))
+            );
         }
 
         #[test]
@@ -490,7 +501,10 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            assert_eq!(decoder.next_stage(Some(&buffer)), Ok(Status::Done(FrontendMessage::Terminate)));
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Ok(Status::Done(FrontendMessage::Terminate))
+            );
         }
     }
 }

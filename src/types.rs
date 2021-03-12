@@ -13,14 +13,13 @@
 // limitations under the License.
 
 use crate::{
-    errors::{TypeValueDecodeErrorKind},
+    errors::{NotSupportedOid, TypeValueDecodeErrorKind},
     Oid, PgFormat, TypeValueDecodeError,
 };
 use std::{
     fmt::{self, Display, Formatter},
     str,
 };
-use crate::errors::NotSupportedOid;
 
 const BOOL_TRUE: &[&str] = &["t", "tr", "tru", "true", "y", "ye", "yes", "on", "1"];
 const BOOL_FALSE: &[&str] = &["f", "fa", "fal", "fals", "false", "n", "no", "of", "off", "0"];

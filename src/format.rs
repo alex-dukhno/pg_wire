@@ -34,7 +34,7 @@ impl TryFrom<i16> for PgFormat {
         match value {
             0 => Ok(PgFormat::Text),
             1 => Ok(PgFormat::Binary),
-            other => Err(UnrecognizedFormat(other).into()),
+            other => Err(UnrecognizedFormat(other)),
         }
     }
 }
