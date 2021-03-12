@@ -12,14 +12,88 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{format::UnrecognizedFormat, request_codes::Code, Oid, PgType};
 use std::{
     fmt::{self, Display, Formatter},
     num::ParseIntError,
     str::Utf8Error,
 };
 
-/// An error which can be returned when decoding raw bytes into [Value](crate::types::Value)s
+use crate::{Oid, PgType, request_codes::Code};
+
+/// Represents an error if frontend sent unrecognizable format
+/// contains the integer code that was sent
+#[derive(Debug, PartialEq)]
+pub struct UnrecognizedFormat(pub(crate) i16);
+
+impl Display for UnrecognizedFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown format code: {}", self.0)
+    }
+}
+
+/// Represents an error if frontend sent [Oid] that is not supported
+#[derive(Debug, PartialEq)]
+pub struct NotSupportedOid(pub(crate) Oid);
+
+impl Display for NotSupportedOid {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} OID is not supported", self.0)
+    }
+}
+
+/// An error which can be returned when decoding
+/// [FrontendMessage](crate::messages::FrontendMessage)s from raw bytes
+#[derive(Debug, PartialEq)]
+pub struct MessageFormatError<'e> {
+    kind: MessageFormatErrorKind<'e>
+}
+
+impl<'e> From<MessageFormatErrorKind<'e>> for MessageFormatError<'e> {
+    fn from(kind: MessageFormatErrorKind<'e>) -> MessageFormatError {
+        MessageFormatError { kind }
+    }
+}
+
+impl<'e> From<PayloadError<'e>> for MessageFormatError<'e> {
+    fn from(error: PayloadError<'e>) -> MessageFormatError {
+        MessageFormatError { kind: MessageFormatErrorKind::PayloadError(error) }
+    }
+}
+
+impl<'e> From<NotSupportedOid> for MessageFormatError<'e> {
+    fn from(error: NotSupportedOid) -> MessageFormatError<'e> {
+        MessageFormatError { kind: MessageFormatErrorKind::NotSupportedOid(error) }
+    }
+}
+
+impl<'e> From<UnrecognizedFormat> for MessageFormatError<'e> {
+    fn from(error: UnrecognizedFormat) -> MessageFormatError<'e> {
+        MessageFormatError { kind: MessageFormatErrorKind::UnrecognizedFormat(error) }
+    }
+}
+
+impl<'e> Display for MessageFormatError<'e> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            MessageFormatErrorKind::PayloadError(error) => write!(f, "{}", error),
+            MessageFormatErrorKind::InvalidTypeByte(type_byte) => write!(f, "invalid type byte in Describe frontend message: {}", type_byte),
+            MessageFormatErrorKind::UnsupportedFrontendMessage(tag) => write!(f, "unsupported frontend message tag {}", tag),
+            MessageFormatErrorKind::NotSupportedOid(error) => write!(f, "{}", error),
+            MessageFormatErrorKind::UnrecognizedFormat(error) => write!(f, "{}", error),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum MessageFormatErrorKind<'e> {
+    PayloadError(PayloadError<'e>),
+    InvalidTypeByte(char),
+    UnsupportedFrontendMessage(char),
+    NotSupportedOid(NotSupportedOid),
+    UnrecognizedFormat(UnrecognizedFormat)
+}
+
+/// An error which can be returned when decoding [Value](crate::types::Value)s from raw bytes
 #[derive(Debug, PartialEq)]
 pub struct TypeValueDecodeError<'e> {
     kind: TypeValueDecodeErrorKind<'e>,
@@ -192,8 +266,9 @@ mod tests {
 
     #[cfg(test)]
     mod payload_error {
-        use super::*;
         use std::str;
+
+        use super::*;
 
         #[test]
         fn invalid_utf_string() {
@@ -241,8 +316,9 @@ mod tests {
 
     #[cfg(test)]
     mod type_value_decode_error {
-        use super::*;
         use std::{str, str::FromStr};
+
+        use super::*;
 
         #[test]
         fn not_enough_bytes() {
