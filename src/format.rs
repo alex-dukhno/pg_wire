@@ -14,6 +14,8 @@
 
 use std::convert::TryFrom;
 
+use crate::errors::UnrecognizedFormat;
+
 /// PostgreSQL formats for transferring data
 /// `0` - textual representation
 /// `1` - binary representation
@@ -26,21 +28,16 @@ pub enum PgFormat {
 }
 
 impl TryFrom<i16> for PgFormat {
-    type Error = crate::Error;
+    type Error = UnrecognizedFormat;
 
     fn try_from(value: i16) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(PgFormat::Text),
             1 => Ok(PgFormat::Binary),
-            other => Err(UnrecognizedFormat(other).into()),
+            other => Err(UnrecognizedFormat(other)),
         }
     }
 }
-
-/// Represents an error if frontend sent unrecognizable format
-/// contains the integer code that was sent
-#[derive(Debug, PartialEq)]
-pub(crate) struct UnrecognizedFormat(pub(crate) i16);
 
 #[cfg(test)]
 mod tests {
@@ -48,6 +45,6 @@ mod tests {
 
     #[test]
     fn unrecognized_format() {
-        assert_eq!(PgFormat::try_from(2), Err(UnrecognizedFormat(2).into()));
+        assert_eq!(PgFormat::try_from(2), Err(UnrecognizedFormat(2)));
     }
 }

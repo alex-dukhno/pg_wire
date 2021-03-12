@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::{
-    errors::{Error, TypeValueDecodeErrorKind},
+    errors::{NotSupportedOid, TypeValueDecodeErrorKind},
     Oid, PgFormat, TypeValueDecodeError,
 };
 use std::{
@@ -77,7 +77,7 @@ impl PgType {
     }
 
     /// Returns the type corresponding to the provided [Oid], if the it is known.
-    pub fn from_oid(oid: Oid) -> Result<Option<PgType>, Error> {
+    pub fn from_oid(oid: Oid) -> Result<Option<PgType>, NotSupportedOid> {
         match oid {
             0 => Ok(None),
             16 => Ok(Some(PgType::Bool)),
@@ -86,7 +86,7 @@ impl PgType {
             21 => Ok(Some(PgType::SmallInt)),
             23 => Ok(Some(PgType::Integer)),
             1043 => Ok(Some(PgType::VarChar)),
-            _ => Err(Error::NotSupportedOid(oid)),
+            _ => Err(NotSupportedOid(oid)),
         }
     }
 
@@ -233,7 +233,7 @@ mod tests {
 
         #[test]
         fn not_supported_oid() {
-            assert_eq!(PgType::from_oid(1_000_000), Err(Error::NotSupportedOid(1_000_000)));
+            assert_eq!(PgType::from_oid(1_000_000), Err(NotSupportedOid(1_000_000)));
         }
 
         #[test]

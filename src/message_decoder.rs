@@ -14,18 +14,11 @@
 
 use crate::{
     cursor::Cursor,
-    errors::Error,
-    message_decoder::state::{Payload, Tag},
+    errors::{MessageFormatError, MessageFormatErrorKind},
     messages::{FrontendMessage, BIND, CLOSE, DESCRIBE, EXECUTE, FLUSH, PARSE, QUERY, SYNC, TERMINATE},
     PgFormat, PgType,
 };
-use state::State;
-use std::{
-    convert::TryFrom,
-    mem::{self, MaybeUninit},
-};
-
-mod state;
+use std::convert::TryFrom;
 
 /// Represents a status of a `MessageDecoder` stage
 #[derive(Debug, PartialEq)]
@@ -37,6 +30,13 @@ pub enum Status {
     Decoding,
     /// `MessageDecoder` has decoded a message and returns it content
     Done(FrontendMessage),
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum State {
+    RequestingTag,
+    Tag(u8),
+    WaitingForPayload,
 }
 
 /// Decodes messages from client
@@ -62,49 +62,42 @@ pub enum Status {
 ///     }
 /// }
 /// ```
+#[derive(Default)]
 pub struct MessageDecoder {
-    state: State,
+    state: Option<State>,
     tag: u8,
 }
 
-impl Default for MessageDecoder {
-    fn default() -> MessageDecoder {
-        MessageDecoder::new()
-    }
-}
-
 impl MessageDecoder {
-    /// Creates new `MessageDecoder`
-    pub fn new() -> MessageDecoder {
-        MessageDecoder {
-            state: State::new(),
-            tag: 0,
-        }
-    }
-
     /// Proceed to the next stage of decoding received message
-    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status, Error> {
-        let payload = if let Some(payload) = payload { payload } else { &[] };
-        let mut state = unsafe { MaybeUninit::zeroed().assume_init() };
-        mem::swap(&mut state, &mut self.state);
-        let (new_state, prev) = state.transit_to_next(payload)?;
-        self.state = new_state;
-        match prev {
-            State::Created(_) => Ok(Status::Requesting(1)),
-            State::RequestingTag(_) => Ok(Status::Requesting(4)),
-            State::Tag(Tag(tag)) => {
-                self.tag = tag;
-                Ok(Status::Requesting((Cursor::from(payload).read_i32()? - 4) as usize))
+    pub fn next_stage<'e>(&'e mut self, payload: Option<&'e [u8]>) -> Result<Status, MessageFormatError<'e>> {
+        let buf = if let Some(payload) = payload { payload } else { &[] };
+        match self.state.take() {
+            None => {
+                self.state = Some(State::RequestingTag);
+                Ok(Status::Requesting(1))
             }
-            State::WaitingForPayload(_) => Ok(Status::Decoding),
-            State::Payload(Payload(data)) => {
-                let message = Self::decode(self.tag, &data)?;
+            Some(State::RequestingTag) => {
+                if buf.is_empty() {
+                    Err(MessageFormatError::from(MessageFormatErrorKind::MissingMessageTag))
+                } else {
+                    self.state = Some(State::Tag(buf[0]));
+                    Ok(Status::Requesting(4))
+                }
+            }
+            Some(State::Tag(tag)) => {
+                self.tag = tag;
+                self.state = Some(State::WaitingForPayload);
+                Ok(Status::Requesting((Cursor::from(buf).read_i32()? - 4) as usize))
+            }
+            Some(State::WaitingForPayload) => {
+                let message = Self::decode(self.tag, buf)?;
                 Ok(Status::Done(message))
             }
         }
     }
 
-    fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, Error> {
+    fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, MessageFormatError> {
         log::debug!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
 
         let mut cursor = Cursor::from(buffer);
@@ -159,8 +152,7 @@ impl MessageDecoder {
                 match first_char {
                     b'P' => Ok(FrontendMessage::ClosePortal { name }),
                     b'S' => Ok(FrontendMessage::CloseStatement { name }),
-                    other => Err(Error::InvalidInput(format!(
-                        "invalid type byte in Close frontend message: {:?}",
+                    other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(
                         char::from(other),
                     ))),
                 }
@@ -171,8 +163,7 @@ impl MessageDecoder {
                 match first_char {
                     b'P' => Ok(FrontendMessage::DescribePortal { name }),
                     b'S' => Ok(FrontendMessage::DescribeStatement { name }),
-                    other => Err(Error::InvalidInput(format!(
-                        "invalid type byte in Describe frontend message: {:?}",
+                    other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(
                         char::from(other),
                     ))),
                 }
@@ -204,11 +195,9 @@ impl MessageDecoder {
 
             TERMINATE => Ok(FrontendMessage::Terminate),
 
-            // Invalid.
-            _ => {
-                log::error!("unsupported frontend message tag {}", tag);
-                Err(Error::UnsupportedFrontendMessage)
-            }
+            _ => Err(MessageFormatError::from(
+                MessageFormatErrorKind::UnsupportedFrontendMessage(char::from(tag)),
+            )),
         }
     }
 }
@@ -262,25 +251,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            assert_eq!(decoder.next_stage(Some(QUERY_BYTES)), Ok(Status::Decoding));
-        }
-
-        #[test]
-        fn request_next_message() {
-            let mut decoder = MessageDecoder::default();
-
-            decoder.next_stage(None).expect("proceed to the next stage");
-            decoder.next_stage(Some(&[QUERY])).expect("proceed to the next stage");
-            decoder
-                .next_stage(Some(&LEN.to_be_bytes()))
-                .expect("proceed to the next stage");
-
-            decoder
-                .next_stage(Some(QUERY_BYTES))
-                .expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(QUERY_BYTES)),
                 Ok(Status::Done(FrontendMessage::Query {
                     sql: "select * from t".to_owned()
                 }))
@@ -301,8 +273,6 @@ mod tests {
                 .next_stage(Some(QUERY_BYTES))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(None).expect("proceed to the next stage");
-
             assert_eq!(decoder.next_stage(None), Ok(Status::Requesting(1)));
         }
     }
@@ -313,6 +283,10 @@ mod tests {
 
         #[test]
         fn query() {
+            let buffer = [
+                99, 114, 101, 97, 116, 101, 32, 115, 99, 104, 101, 109, 97, 32, 115, 99, 104, 101, 109, 97, 95, 110,
+                97, 109, 101, 59, 0,
+            ];
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
@@ -321,15 +295,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            let buffer = [
-                99, 114, 101, 97, 116, 101, 32, 115, 99, 104, 101, 109, 97, 32, 115, 99, 104, 101, 109, 97, 95, 110,
-                97, 109, 101, 59, 0,
-            ];
-
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::Query {
                     sql: "create schema schema_name;".to_owned()
                 }))
@@ -342,7 +309,6 @@ mod tests {
                 112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95,
                 110, 97, 109, 101, 0, 0, 2, 0, 1, 0, 1, 0, 2, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2, 0, 0,
             ];
-
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
@@ -351,10 +317,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::Bind {
                     portal_name: "portal_name".to_owned(),
                     statement_name: "statement_name".to_owned(),
@@ -368,7 +332,6 @@ mod tests {
         #[test]
         fn close_portal() {
             let buffer = [80, 112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0];
-
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
@@ -377,10 +340,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::ClosePortal {
                     name: "portal_name".to_owned(),
                 }))
@@ -398,10 +359,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::CloseStatement {
                     name: "statement_name".to_owned(),
                 }))
@@ -421,10 +380,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::DescribePortal {
                     name: "portal_name".to_owned()
                 }))
@@ -444,10 +401,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::DescribeStatement {
                     name: "statement_name".to_owned()
                 }))
@@ -465,10 +420,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::Execute {
                     portal_name: "portal_name".to_owned(),
                     max_rows: 0,
@@ -487,9 +440,10 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
-            assert_eq!(decoder.next_stage(None), Ok(Status::Done(FrontendMessage::Flush)));
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Ok(Status::Done(FrontendMessage::Flush))
+            );
         }
 
         #[test]
@@ -499,7 +453,6 @@ mod tests {
                 110, 97, 109, 101, 46, 116, 97, 98, 108, 101, 95, 110, 97, 109, 101, 32, 119, 104, 101, 114, 101, 32,
                 115, 105, 95, 99, 111, 108, 117, 109, 110, 32, 61, 32, 36, 49, 59, 0, 0, 1, 0, 0, 0, 23,
             ];
-
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
@@ -508,10 +461,8 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
             assert_eq!(
-                decoder.next_stage(None),
+                decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::Parse {
                     statement_name: "".to_owned(),
                     sql: "select * from schema_name.table_name where si_column = $1;".to_owned(),
@@ -523,7 +474,6 @@ mod tests {
         #[test]
         fn sync() {
             let buffer = [];
-
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
@@ -532,15 +482,15 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
-            assert_eq!(decoder.next_stage(None), Ok(Status::Done(FrontendMessage::Sync)));
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Ok(Status::Done(FrontendMessage::Sync))
+            );
         }
 
         #[test]
         fn terminate() {
             let buffer = [];
-
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
@@ -551,9 +501,10 @@ mod tests {
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
-            decoder.next_stage(Some(&buffer)).expect("proceed to the next stage");
-
-            assert_eq!(decoder.next_stage(None), Ok(Status::Done(FrontendMessage::Terminate)));
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Ok(Status::Done(FrontendMessage::Terminate))
+            );
         }
     }
 }
