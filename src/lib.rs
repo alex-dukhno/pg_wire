@@ -21,6 +21,7 @@ pub use hand_shake::{Process as HandShakeProcess, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
 pub use types::{PgType, Value};
+pub mod ringbuf;
 
 mod cursor;
 mod errors;
@@ -29,7 +30,6 @@ mod hand_shake;
 mod message_decoder;
 mod messages;
 mod request_codes;
-mod ringbuf;
 mod types;
 
 /// Connection key-value params
