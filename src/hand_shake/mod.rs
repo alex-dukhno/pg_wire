@@ -12,10 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConnId, ConnSecretKey, Error};
-use state::{MessageLen, ReadSetupMessage, SetupParsed, State};
+use crate::{ConnId, ConnSecretKey, Error, cursor::Cursor};
+use crate::{
+    request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
+};
 
-mod state;
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum SetupParsed {
+    Established(Vec<(String, String)>),
+    Cancel(ConnId, ConnSecretKey),
+    Secure,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum State {
+    MessageLen,
+    ParseSetup(usize),
+    SetupParsed(SetupParsed),
+}
 
 /// Encapsulate protocol hand shake process
 ///
@@ -66,30 +80,134 @@ impl Process {
     pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status, Error> {
         match self.state.take() {
             None => {
-                self.state = Some(State::new());
+                self.state = Some(State::MessageLen);
                 Ok(Status::Requesting(Request::Buffer(4)))
             }
             Some(state) => {
                 if let Some(bytes) = payload {
-                    let new_state = state.try_step(bytes)?;
-                    let result = match new_state.clone() {
-                        State::ParseSetup(ReadSetupMessage(len)) => Ok(Status::Requesting(Request::Buffer(len))),
-                        State::MessageLen(MessageLen(len)) => Ok(Status::Requesting(Request::Buffer(len))),
-                        State::SetupParsed(SetupParsed::Established(props)) => Ok(Status::Done(props)),
-                        State::SetupParsed(SetupParsed::Secure) => Ok(Status::Requesting(Request::UpgradeToSsl)),
-                        State::SetupParsed(SetupParsed::Cancel(conn_id, secret_key)) => {
-                            Ok(Status::Cancel(conn_id, secret_key))
-                        }
+                    let mut buffer = Cursor::from(bytes);
+                    let (result, new_state) = match state {
+                        State::MessageLen => {
+                            let len = buffer.read_i32()?;
+                            (Status::Requesting(Request::Buffer((len - 4) as usize)), State::ParseSetup((len - 4) as usize))
+                        },
+                        State::ParseSetup(_hand_shake) => {
+                            let code = Code(buffer.read_i32()?);
+                            match code {
+                                VERSION_1_CODE | VERSION_2_CODE => return Err(Error::UnsupportedVersion(code)),
+                                VERSION_3_CODE => {
+                                    let mut props = vec![];
+                                    loop {
+                                        let key = buffer.read_cstr()?.to_owned();
+                                        if key.is_empty() {
+                                            break;
+                                        }
+                                        let value = buffer.read_cstr()?.to_owned();
+                                        props.push((key, value));
+                                    }
+                                    (Status::Done(props.clone()), State::SetupParsed(SetupParsed::Established(props)))
+                                }
+                                CANCEL_REQUEST_CODE => {
+                                    let conn_id = buffer.read_i32()?;
+                                    let secret_key = buffer.read_i32()?;
+                                    (Status::Cancel(conn_id, secret_key), State::SetupParsed(SetupParsed::Cancel(conn_id, secret_key)))
+                                }
+                                SSL_REQUEST_CODE => (Status::Requesting(Request::UpgradeToSsl), State::SetupParsed(SetupParsed::Secure)),
+                                otherwise => return Err(Error::UnsupportedRequest(otherwise)),
+                            }
+                        },
+                        State::SetupParsed(hand_shake) => match hand_shake {
+                            SetupParsed::Secure => (Status::Requesting(Request::Buffer(4)), State::MessageLen),
+                            _ => return Err(Error::VerificationFailed),
+                        },
                     };
                     self.state = Some(new_state);
-                    result
+                    Ok(result)
                 } else {
-                    self.state = Some(state.try_step(&[])?);
+                    let buf = vec![];
+                    let mut buffer = Cursor::from(buf.as_slice());
+                    let new_state = match state {
+                        State::MessageLen => {
+                            let len = buffer.read_i32()?;
+                            State::ParseSetup((len - 4) as usize)
+                        },
+                        State::ParseSetup(_hand_shake) => {
+                            let code = Code(buffer.read_i32()?);
+                            let setup_parsed = match code {
+                                VERSION_1_CODE | VERSION_2_CODE => return Err(Error::UnsupportedVersion(code)),
+                                VERSION_3_CODE => {
+                                    let mut props = vec![];
+                                    loop {
+                                        let key = buffer.read_cstr()?.to_owned();
+                                        if key.is_empty() {
+                                            break;
+                                        }
+                                        let value = buffer.read_cstr()?.to_owned();
+                                        props.push((key, value));
+                                    }
+                                    SetupParsed::Established(props)
+                                }
+                                CANCEL_REQUEST_CODE => {
+                                    let conn_id = buffer.read_i32()?;
+                                    let secret_key = buffer.read_i32()?;
+                                    SetupParsed::Cancel(conn_id, secret_key)
+                                }
+                                SSL_REQUEST_CODE => SetupParsed::Secure,
+                                otherwise => return Err(Error::UnsupportedRequest(otherwise)),
+                            };
+                            State::SetupParsed(setup_parsed)
+                        },
+                        State::SetupParsed(hand_shake) => match hand_shake {
+                            SetupParsed::Secure => State::MessageLen,
+                            _ => return Err(Error::VerificationFailed),
+                        },
+                    };
+                    self.state = Some(new_state);
                     Ok(Status::Requesting(Request::Buffer(4)))
                 }
             }
         }
     }
+
+    // pub(crate) fn try_step(state: State, buf: &[u8]) -> Result<State, Error> {
+    //     let mut buffer = Cursor::from(buf);
+    //     match state {
+    //         State::MessageLen => {
+    //             let len = buffer.read_i32()?;
+    //             Ok(State::ParseSetup((len - 4) as usize))
+    //         },
+    //         State::ParseSetup(_hand_shake) => {
+    //             let code = Code(buffer.read_i32()?);
+    //             let setup_parsed = match code {
+    //                 VERSION_1_CODE | VERSION_2_CODE => return Err(Error::UnsupportedVersion(code)),
+    //                 VERSION_3_CODE => {
+    //                     let mut props = vec![];
+    //                     loop {
+    //                         let key = buffer.read_cstr()?.to_owned();
+    //                         if key.is_empty() {
+    //                             break;
+    //                         }
+    //                         let value = buffer.read_cstr()?.to_owned();
+    //                         props.push((key, value));
+    //                     }
+    //                     SetupParsed::Established(props)
+    //                 }
+    //                 CANCEL_REQUEST_CODE => {
+    //                     let conn_id = buffer.read_i32()?;
+    //                     let secret_key = buffer.read_i32()?;
+    //                     SetupParsed::Cancel(conn_id, secret_key)
+    //                 }
+    //                 SSL_REQUEST_CODE => SetupParsed::Secure,
+    //                 otherwise => return Err(Error::UnsupportedRequest(otherwise)),
+    //             };
+    //             Ok(State::SetupParsed(setup_parsed))
+    //         },
+    //         State::SetupParsed(hand_shake) => match hand_shake {
+    //             SetupParsed::Secure => Ok(State::MessageLen),
+    //             _ => Err(Error::VerificationFailed),
+    //         },
+    //     }
+    // }
 }
 
 /// Represents status of the [HandShakeProcess](Process) stages

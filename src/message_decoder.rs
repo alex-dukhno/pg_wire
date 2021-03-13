@@ -25,9 +25,6 @@ use std::convert::TryFrom;
 pub enum Status {
     /// `MessageDecoder` requests buffer with specified size
     Requesting(usize),
-    /// `MessageDecoder` is in a process of decoding and decoded front message will be available
-    /// after the next stage
-    Decoding,
     /// `MessageDecoder` has decoded a message and returns it content
     Done(FrontendMessage),
 }
@@ -56,7 +53,6 @@ pub(crate) enum State {
 ///             channel.read_exact(&mut buffer)?;
 ///             current = Some(buffer);
 ///         }
-///         Ok(MessageDecoderStatus::Decoding) => {}
 ///         Ok(MessageDecoderStatus::Done(message)) => return Ok(Ok(message)),
 ///         Err(error) => return Err(error),
 ///     }
