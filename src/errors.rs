@@ -24,6 +24,17 @@ pub struct HandShakeError<'e> {
     kind: HandShakeErrorKind<'e>
 }
 
+impl<'e> Display for HandShakeError<'e> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            HandShakeErrorKind::UnsupportedProtocolVersion(code) => write!(f, "{}", code),
+            HandShakeErrorKind::UnsupportedClientRequest(code) => write!(f, "{}", code),
+            HandShakeErrorKind::VerificationFailed => write!(f, "Verification Failed"),
+            HandShakeErrorKind::PayloadError(error) => write!(f, "{}", error),
+        }
+    }
+}
+
 impl<'e> From<HandShakeErrorKind<'e>> for HandShakeError<'e> {
     fn from(kind: HandShakeErrorKind) -> HandShakeError {
         HandShakeError { kind }
