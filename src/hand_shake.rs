@@ -37,13 +37,15 @@ pub(crate) enum State {
 /// let mut buffer: Option<Vec<u8>> = None;
 /// loop {
 ///     match process.next_stage(buffer.as_deref()) {
-///         Ok(HandShakeStatus::Requesting(HandShakeRequest::Buffer(len))) => {
+///         Ok(HandShakeStatus::RequestingBytes(len)) => {
 ///             let mut buf = vec![b'0'; len];
-///             buffer = Some(stream.read(&mut buf));
+///             buffer = Some(stream.read(&mut buf)?);
 ///         }
-///         Ok(HandShakeStatus::Requesting(HandShakeRequest::UpgradeToSsl)) => {
+///         Ok(HandShakeStatus::UpdatingToSecureWithReadingBytes(len)) => {
 ///             stream.write_all(&[b'S']); // accepting tls connection from client
 ///             stream = tls_stream(stream);
+///             let mut buf = vec![b'0'; len];
+///             buffer = Some(stream.read_exact(&mut buf)?);
 ///         }
 ///         Ok(HandShakeStatus::Cancel(conn_id, secret_key)) => {
 ///             handle_request_cancellation(conn_id, secret_key);
