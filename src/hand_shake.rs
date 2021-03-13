@@ -137,15 +137,6 @@ pub enum Status {
     Cancel(ConnId, ConnSecretKey),
 }
 
-/// Hand shake request to a server process
-#[derive(Debug, PartialEq)]
-pub enum Request {
-    /// Server should provide `Process` with buffer of request size
-    Buffer(usize),
-    /// Server should use SSL protocol over current connection stream
-    UpgradeToSsl,
-}
-
 #[cfg(test)]
 mod perform_hand_shake_loop {
     use super::*;

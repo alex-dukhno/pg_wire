@@ -17,7 +17,7 @@
 
 pub use errors::{HandShakeError, MessageFormatError, PayloadError, TypeValueDecodeError};
 pub use format::PgFormat;
-pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, Status as HandShakeStatus};
+pub use hand_shake::{Process as HandShakeProcess, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
 pub use types::{PgType, Value};
