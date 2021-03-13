@@ -3,7 +3,9 @@
 This module is [ringbuf](https://github.com/agerasev/ringbuf) crate source code imported into pg_wire codebase 
 with number of modifications:
 
-* removed `no_std`
+* removed `no_std` feature
+* removed `benchmarks` modules
+* made `RingBuf` to hold only `u8`
 
 
 Copyright (c) 2019 Alexey Gerasev

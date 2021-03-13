@@ -20,7 +20,7 @@
 
 use std::{
     cmp::{self, min},
-    mem::{self, MaybeUninit},
+    mem,
     ops::Range,
     ptr::copy_nonoverlapping,
     sync::atomic,
@@ -30,11 +30,11 @@ use super::{producer::Producer, ring_buffer::*};
 use std::sync::Arc;
 
 /// Consumer part of ring buffer.
-pub struct Consumer<T> {
-    pub(crate) rb: Arc<RingBuffer<T>>,
+pub struct Consumer {
+    pub(crate) rb: Arc<RingBuffer>,
 }
 
-impl<T: Sized> Consumer<T> {
+impl Consumer {
     /// Returns capacity of the ring buffer.
     ///
     /// The capacity of the buffer is constant.
@@ -89,7 +89,7 @@ impl<T: Sized> Consumer<T> {
     /// First slice contains older elements.
     ///
     /// *The slices may not include elements pushed to the buffer by concurring producer after the method call.*
-    pub fn access<F: FnOnce(&[T], &[T])>(&self, f: F) {
+    pub fn access<F: FnOnce(&[u8], &[u8])>(&self, f: F) {
         let ranges = self.get_ranges();
 
         unsafe {
@@ -97,8 +97,8 @@ impl<T: Sized> Consumer<T> {
             let right = &self.rb.data.get_ref()[ranges.1];
 
             f(
-                &*(left as *const [MaybeUninit<T>] as *const [T]),
-                &*(right as *const [MaybeUninit<T>] as *const [T]),
+                &*(left),
+                &*(right),
             );
         }
     }
@@ -110,7 +110,7 @@ impl<T: Sized> Consumer<T> {
     /// First slice contains older elements.
     ///
     /// *The iteration may not include elements pushed to the buffer by concurring producer after the method call.*
-    pub fn access_mut<F: FnOnce(&mut [T], &mut [T])>(&mut self, f: F) {
+    pub fn access_mut<F: FnOnce(&mut [u8], &mut [u8])>(&mut self, f: F) {
         let ranges = self.get_ranges();
 
         unsafe {
@@ -118,13 +118,13 @@ impl<T: Sized> Consumer<T> {
             let right = &mut self.rb.data.get_mut()[ranges.1];
 
             f(
-                &mut *(left as *mut [MaybeUninit<T>] as *mut [T]),
-                &mut *(right as *mut [MaybeUninit<T>] as *mut [T]),
+                &mut *(left),
+                &mut *(right),
             );
         }
     }
 
-    /// Allows to read from ring buffer memory directry.
+    /// Allows to read from ring buffer memory directly.
     ///
     /// *This function is unsafe because it gives access to possibly uninitialized memory*
     ///
@@ -147,7 +147,7 @@ impl<T: Sized> Consumer<T> {
     ///
     pub unsafe fn pop_access<F>(&mut self, f: F) -> usize
     where
-        F: FnOnce(&mut [MaybeUninit<T>], &mut [MaybeUninit<T>]) -> usize,
+        F: FnOnce(&mut [u8], &mut [u8]) -> usize,
     {
         let head = self.rb.head.load(atomic::Ordering::Acquire);
         let tail = self.rb.tail.load(atomic::Ordering::Acquire);
@@ -187,7 +187,7 @@ impl<T: Sized> Consumer<T> {
     ///
     /// *You should manage copied elements after call, otherwise you may get a memory leak.*
     ///
-    pub unsafe fn pop_copy(&mut self, elems: &mut [MaybeUninit<T>]) -> usize {
+    pub unsafe fn pop_copy(&mut self, elems: &mut [u8]) -> usize {
         self.pop_access(|left, right| {
             if elems.len() < left.len() {
                 copy_nonoverlapping(left.as_ptr(), elems.as_mut_ptr(), elems.len());
@@ -215,8 +215,8 @@ impl<T: Sized> Consumer<T> {
 
     /// Removes latest element from the ring buffer and returns it.
     /// Returns `None` if the ring buffer is empty.
-    pub fn pop(&mut self) -> Option<T> {
-        let mut elem_mu = MaybeUninit::uninit();
+    pub fn pop(&mut self) -> Option<u8> {
+        let mut elem_mu = 0;
         let n = unsafe {
             self.pop_access(|slice, _| {
                 if !slice.is_empty() {
@@ -229,7 +229,7 @@ impl<T: Sized> Consumer<T> {
         };
         match n {
             0 => None,
-            1 => Some(unsafe { elem_mu.assume_init() }),
+            1 => Some(elem_mu),
             _ => unreachable!(),
         }
     }
@@ -239,7 +239,7 @@ impl<T: Sized> Consumer<T> {
     /// The closure is called until it returns `false` or the ring buffer is empty.
     ///
     /// The method returns number of elements been removed from the buffer.
-    pub fn pop_each<F: FnMut(T) -> bool>(&mut self, mut f: F, count: Option<usize>) -> usize {
+    pub fn pop_each<F: FnMut(u8) -> bool>(&mut self, mut f: F, count: Option<usize>) -> usize {
         unsafe {
             self.pop_access(|left, right| {
                 let lb = match count {
@@ -247,7 +247,7 @@ impl<T: Sized> Consumer<T> {
                     None => left.len(),
                 };
                 for (i, dst) in left[0..lb].iter_mut().enumerate() {
-                    if !f(mem::replace(dst, MaybeUninit::uninit()).assume_init()) {
+                    if !f(*dst) {
                         return i + 1;
                     }
                 }
@@ -260,7 +260,7 @@ impl<T: Sized> Consumer<T> {
                     None => right.len(),
                 };
                 for (i, dst) in right[0..rb].iter_mut().enumerate() {
-                    if !f(mem::replace(dst, MaybeUninit::uninit()).assume_init()) {
+                    if !f(*dst) {
                         return i + lb + 1;
                     }
                 }
@@ -272,7 +272,7 @@ impl<T: Sized> Consumer<T> {
     /// Iterate immutably over the elements contained by the ring buffer without removing them.
     ///
     /// *The iteration may not include elements pushed to the buffer by concurring producer after the method call.*
-    pub fn for_each<F: FnMut(&T)>(&self, mut f: F) {
+    pub fn for_each<F: FnMut(&u8)>(&self, mut f: F) {
         self.access(|left, right| {
             for c in left.iter() {
                 f(c);
@@ -286,7 +286,7 @@ impl<T: Sized> Consumer<T> {
     /// Iterate mutably over the elements contained by the ring buffer without removing them.
     ///
     /// *The iteration may not include elements pushed to the buffer by concurring producer after the method call.*
-    pub fn for_each_mut<F: FnMut(&mut T)>(&mut self, mut f: F) {
+    pub fn for_each_mut<F: FnMut(&mut u8)>(&mut self, mut f: F) {
         self.access_mut(|left, right| {
             for c in left.iter_mut() {
                 f(c);
@@ -304,25 +304,17 @@ impl<T: Sized> Consumer<T> {
         unsafe {
             self.pop_access(|left, right| {
                 let (mut cnt, mut rem) = (0, n);
-                let left_elems = if rem <= left.len() {
+                if rem <= left.len() {
                     cnt += rem;
-                    left.get_unchecked_mut(0..rem)
                 } else {
                     cnt += left.len();
-                    left
-                };
+                }
                 rem = n - cnt;
 
-                let right_elems = if rem <= right.len() {
+                if rem <= right.len() {
                     cnt += rem;
-                    right.get_unchecked_mut(0..rem)
                 } else {
                     cnt += right.len();
-                    right
-                };
-
-                for e in left_elems.iter_mut().chain(right_elems.iter_mut()) {
-                    e.as_mut_ptr().drop_in_place();
                 }
 
                 cnt
@@ -335,27 +327,27 @@ impl<T: Sized> Consumer<T> {
     /// The producer and consumer parts may be of different buffers as well as of the same one.
     ///
     /// On success returns count of elements been moved.
-    pub fn move_to(&mut self, other: &mut Producer<T>, count: Option<usize>) -> usize {
+    pub fn move_to(&mut self, other: &mut Producer, count: Option<usize>) -> usize {
         move_items(self, other, count)
     }
 }
 
-impl<T: Sized + Copy> Consumer<T> {
+impl Consumer {
     /// Removes first elements from the ring buffer and writes them into a slice.
     /// Elements should be [`Copy`](https://doc.rust-lang.org/std/marker/trait.Copy.html).
     ///
     /// On success returns count of elements been removed from the ring buffer.
-    pub fn pop_slice(&mut self, elems: &mut [T]) -> usize {
-        unsafe { self.pop_copy(&mut *(elems as *mut [T] as *mut [MaybeUninit<T>])) }
+    pub fn pop_slice(&mut self, elems: &mut [u8]) -> usize {
+        unsafe { self.pop_copy(elems) }
     }
 }
 
-impl Consumer<u8> {
+impl Consumer {
     /// Removes at most first `count` bytes from the ring buffer and writes them into
     /// a [`Write`](https://doc.rust-lang.org/std/io/trait.Write.html) instance.
     /// If `count` is `None` then as much as possible bytes will be written.
     ///
-    /// Returns `Ok(n)` if `write` is succeded. `n` is number of bytes been written.
+    /// Returns `Ok(n)` if `write` is succeeded. `n` is number of bytes been written.
     /// `n == 0` means that either `write` returned zero or ring buffer is empty.
     ///
     /// If `write` is failed then error is returned.
@@ -378,7 +370,7 @@ impl Consumer<u8> {
                     None => left,
                 };
                 match writer
-                    .write(&*(left as *const [MaybeUninit<u8>] as *const [u8]))
+                    .write(&left)
                     .and_then(|n| {
                         if n <= left.len() {
                             Ok(n)
@@ -404,7 +396,7 @@ impl Consumer<u8> {
     }
 }
 
-impl Read for Consumer<u8> {
+impl Read for Consumer {
     fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
         let n = self.pop_slice(buffer);
         if n == 0 && !buffer.is_empty() {

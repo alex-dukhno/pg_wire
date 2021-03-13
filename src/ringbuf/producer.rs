@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::{
-    mem::{self, MaybeUninit},
+    mem,
     ptr::copy_nonoverlapping,
     sync::atomic::Ordering,
 };
@@ -8,11 +8,11 @@ use std::io::{self, Read, Write};
 use super::{consumer::Consumer, ring_buffer::*};
 
 /// Producer part of ring buffer.
-pub struct Producer<T> {
-    pub(crate) rb: Arc<RingBuffer<T>>,
+pub struct Producer {
+    pub(crate) rb: Arc<RingBuffer>,
 }
 
-impl<T: Sized> Producer<T> {
+impl Producer {
     /// Returns capacity of the ring buffer.
     ///
     /// The capacity of the buffer is constant.
@@ -69,7 +69,7 @@ impl<T: Sized> Producer<T> {
     ///
     pub unsafe fn push_access<F>(&mut self, f: F) -> usize
     where
-        F: FnOnce(&mut [MaybeUninit<T>], &mut [MaybeUninit<T>]) -> usize,
+        F: FnOnce(&mut [u8], &mut [u8]) -> usize,
     {
         let head = self.rb.head.load(Ordering::Acquire);
         let tail = self.rb.tail.load(Ordering::Acquire);
@@ -116,7 +116,7 @@ impl<T: Sized> Producer<T> {
     ///
     /// *You should properly fill the slice and manage remaining elements after copy.*
     ///
-    pub unsafe fn push_copy(&mut self, elems: &[MaybeUninit<T>]) -> usize {
+    pub unsafe fn push_copy(&mut self, elems: &[u8]) -> usize {
         self.push_access(|left, right| -> usize {
             if elems.len() < left.len() {
                 copy_nonoverlapping(elems.as_ptr(), left.as_mut_ptr(), elems.len());
@@ -143,9 +143,9 @@ impl<T: Sized> Producer<T> {
     }
 
     /// Appends an element to the ring buffer.
-    /// On failure returns an error containing the element that hasn't beed appended.
-    pub fn push(&mut self, elem: T) -> Result<(), T> {
-        let mut elem_mu = MaybeUninit::new(elem);
+    /// On failure returns an error containing the element that hasn't been appended.
+    pub fn push(&mut self, elem: u8) -> Result<(), u8> {
+        let mut elem_mu = elem;
         let n = unsafe {
             self.push_access(|slice, _| {
                 if !slice.is_empty() {
@@ -157,7 +157,7 @@ impl<T: Sized> Producer<T> {
             })
         };
         match n {
-            0 => Err(unsafe { elem_mu.assume_init() }),
+            0 => Err(elem_mu),
             1 => Ok(()),
             _ => unreachable!(),
         }
@@ -168,18 +168,18 @@ impl<T: Sized> Producer<T> {
     /// The closure is called until it returns `None` or the ring buffer is full.
     ///
     /// The method returns number of elements been put into the buffer.
-    pub fn push_each<F: FnMut() -> Option<T>>(&mut self, mut f: F) -> usize {
+    pub fn push_each<F: FnMut() -> Option<u8>>(&mut self, mut f: F) -> usize {
         unsafe {
             self.push_access(|left, right| {
                 for (i, dst) in left.iter_mut().enumerate() {
                     match f() {
-                        Some(e) => mem::replace(dst, MaybeUninit::new(e)),
+                        Some(e) => *dst = e,
                         None => return i,
                     };
                 }
                 for (i, dst) in right.iter_mut().enumerate() {
                     match f() {
-                        Some(e) => mem::replace(dst, MaybeUninit::new(e)),
+                        Some(e) => *dst = e,
                         None => return i + left.len(),
                     };
                 }
@@ -192,7 +192,7 @@ impl<T: Sized> Producer<T> {
     /// Elements that haven't been added to the ring buffer remain in the iterator.
     ///
     /// Returns count of elements been appended to the ring buffer.
-    pub fn push_iter<I: Iterator<Item = T>>(&mut self, elems: &mut I) -> usize {
+    pub fn push_iter<I: Iterator<Item = u8>>(&mut self, elems: &mut I) -> usize {
         self.push_each(|| elems.next())
     }
 
@@ -201,28 +201,28 @@ impl<T: Sized> Producer<T> {
     /// The producer and consumer parts may be of different buffers as well as of the same one.
     ///
     /// On success returns number of elements been moved.
-    pub fn move_from(&mut self, other: &mut Consumer<T>, count: Option<usize>) -> usize {
+    pub fn move_from(&mut self, other: &mut Consumer, count: Option<usize>) -> usize {
         move_items(other, self, count)
     }
 }
 
-impl<T: Sized + Copy> Producer<T> {
+impl Producer {
     /// Appends elements from slice to the ring buffer.
     /// Elements should be [`Copy`](https://doc.rust-lang.org/std/marker/trait.Copy.html).
     ///
     /// Returns count of elements been appended to the ring buffer.
-    pub fn push_slice(&mut self, elems: &[T]) -> usize {
-        unsafe { self.push_copy(&*(elems as *const [T] as *const [MaybeUninit<T>])) }
+    pub fn push_slice(&mut self, elems: &[u8]) -> usize {
+        unsafe { self.push_copy(elems) }
     }
 }
 
-impl Producer<u8> {
+impl Producer {
     /// Reads at most `count` bytes
     /// from [`Read`](https://doc.rust-lang.org/std/io/trait.Read.html) instance
     /// and appends them to the ring buffer.
     /// If `count` is `None` then as much as possible bytes will be read.
     ///
-    /// Returns `Ok(n)` if `read` is succeded. `n` is number of bytes been read.
+    /// Returns `Ok(n)` if `read` is succeeded. `n` is number of bytes been read.
     /// `n == 0` means that either `read` returned zero or ring buffer is full.
     ///
     /// If `read` is failed then error is returned.
@@ -241,7 +241,7 @@ impl Producer<u8> {
                     None => left,
                 };
                 match reader
-                    .read(&mut *(left as *mut [MaybeUninit<u8>] as *mut [u8]))
+                    .read(left)
                     .and_then(|n| {
                         if n <= left.len() {
                             Ok(n)
@@ -267,7 +267,7 @@ impl Producer<u8> {
     }
 }
 
-impl Write for Producer<u8> {
+impl Write for Producer {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
         let n = self.push_slice(buffer);
         if n == 0 && !buffer.is_empty() {

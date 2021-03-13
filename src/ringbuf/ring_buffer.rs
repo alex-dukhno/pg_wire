@@ -22,48 +22,47 @@ use std::{sync::Arc, vec::Vec};
 use core::{
     cell::UnsafeCell,
     cmp::min,
-    mem::{self, MaybeUninit},
     ptr::{self, copy},
     sync::atomic::{AtomicUsize, Ordering},
 };
 use super::{consumer::Consumer, producer::Producer};
 
-pub(crate) struct SharedVec<T: Sized> {
-    cell: UnsafeCell<Vec<T>>,
+pub(crate) struct SharedVec {
+    cell: UnsafeCell<Vec<u8>>,
 }
 
-unsafe impl<T: Sized> Sync for SharedVec<T> {}
+unsafe impl Sync for SharedVec {}
 
-impl<T: Sized> SharedVec<T> {
-    pub fn new(data: Vec<T>) -> Self {
+impl SharedVec {
+    pub fn new(data: Vec<u8>) -> Self {
         Self {
             cell: UnsafeCell::new(data),
         }
     }
 
-    pub unsafe fn get_ref(&self) -> &Vec<T> {
+    pub unsafe fn get_ref(&self) -> &Vec<u8> {
         &*self.cell.get()
     }
 
     #[allow(clippy::mut_from_ref)]
-    pub unsafe fn get_mut(&self) -> &mut Vec<T> {
+    pub unsafe fn get_mut(&self) -> &mut Vec<u8> {
         &mut *self.cell.get()
     }
 }
 
 /// Ring buffer itself.
-pub struct RingBuffer<T: Sized> {
-    pub(crate) data: SharedVec<MaybeUninit<T>>,
+pub struct RingBuffer {
+    pub(crate) data: SharedVec,
     pub(crate) head: AtomicUsize,
     pub(crate) tail: AtomicUsize,
 }
 
-impl<T: Sized> RingBuffer<T> {
+impl RingBuffer {
     /// Creates a new instance of a ring buffer.
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize) -> RingBuffer {
         let mut data = Vec::new();
-        data.resize_with(capacity + 1, MaybeUninit::uninit);
-        Self {
+        data.resize_with(capacity + 1, || 0);
+        RingBuffer {
             data: SharedVec::new(data),
             head: AtomicUsize::new(0),
             tail: AtomicUsize::new(0),
@@ -71,7 +70,7 @@ impl<T: Sized> RingBuffer<T> {
     }
 
     /// Splits ring buffer into producer and consumer.
-    pub fn split(self) -> (Producer<T>, Consumer<T>) {
+    pub fn split(self) -> (Producer, Consumer) {
         let arc = Arc::new(self);
         (Producer { rb: arc.clone() }, Consumer { rb: arc })
     }
@@ -108,50 +107,26 @@ impl<T: Sized> RingBuffer<T> {
     }
 }
 
-impl<T: Sized> Drop for RingBuffer<T> {
-    fn drop(&mut self) {
-        let data = unsafe { self.data.get_mut() };
-
-        let head = self.head.load(Ordering::Acquire);
-        let tail = self.tail.load(Ordering::Acquire);
-        let len = data.len();
-
-        let slices = if head <= tail {
-            (head..tail, 0..0)
-        } else {
-            (head..len, 0..tail)
-        };
-
-        let drop = |elem_ref: &mut MaybeUninit<T>| unsafe {
-            mem::replace(elem_ref, MaybeUninit::uninit()).assume_init();
-        };
-        for elem in data[slices.0].iter_mut() {
-            drop(elem);
-        }
-        for elem in data[slices.1].iter_mut() {
-            drop(elem);
-        }
-    }
-}
-
-struct SlicePtr<T: Sized> {
-    pub ptr: *mut T,
+struct SlicePtr {
+    pub ptr: *mut u8,
     pub len: usize,
 }
 
-impl<T> SlicePtr<T> {
-    fn null() -> Self {
+impl SlicePtr {
+    fn null() -> SlicePtr {
         Self {
             ptr: ptr::null_mut(),
             len: 0,
         }
     }
-    fn new(slice: &mut [T]) -> Self {
+
+    fn new(slice: &mut [u8]) -> SlicePtr {
         Self {
             ptr: slice.as_mut_ptr(),
             len: slice.len(),
         }
     }
+
     unsafe fn shift(&mut self, count: usize) {
         self.ptr = self.ptr.add(count);
         self.len -= count;
@@ -164,7 +139,7 @@ impl<T> SlicePtr<T> {
 /// `count` is the number of items being moved, if `None` - as much as possible items will be moved.
 ///
 /// Returns number of items been moved.
-pub fn move_items<T>(src: &mut Consumer<T>, dst: &mut Producer<T>, count: Option<usize>) -> usize {
+pub fn move_items(src: &mut Consumer, dst: &mut Producer, count: Option<usize>) -> usize {
     unsafe {
         src.pop_access(|src_left, src_right| -> usize {
             dst.push_access(|dst_left, dst_right| -> usize {

@@ -23,7 +23,7 @@ use super::*;
 #[test]
 fn for_each() {
     let cap = 2;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     let (mut prod, mut cons) = buf.split();
 
     prod.push(10).unwrap();
@@ -43,7 +43,7 @@ fn for_each() {
 #[test]
 fn for_each_mut() {
     let cap = 2;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     let (mut prod, mut cons) = buf.split();
 
     prod.push(10).unwrap();
@@ -66,7 +66,7 @@ fn for_each_mut() {
 
 #[test]
 fn push_pop_slice() {
-    let buf = RingBuffer::<i32>::new(4);
+    let buf = RingBuffer::new(4);
     let (mut prod, mut cons) = buf.split();
 
     let mut tmp = [0; 5];
@@ -91,8 +91,8 @@ fn push_pop_slice() {
 
 #[test]
 fn move_slice() {
-    let buf0 = RingBuffer::<i32>::new(4);
-    let buf1 = RingBuffer::<i32>::new(4);
+    let buf0 = RingBuffer::new(4);
+    let buf1 = RingBuffer::new(4);
     let (mut prod0, mut cons0) = buf0.split();
     let (mut prod1, mut cons1) = buf1.split();
 
@@ -125,8 +125,8 @@ fn move_slice() {
 
 #[test]
 fn move_slice_count() {
-    let buf0 = RingBuffer::<i32>::new(4);
-    let buf1 = RingBuffer::<i32>::new(4);
+    let buf0 = RingBuffer::new(4);
+    let buf1 = RingBuffer::new(4);
     let (mut prod0, mut cons0) = buf0.split();
     let (mut prod1, mut cons1) = buf1.split();
 

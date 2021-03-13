@@ -22,7 +22,7 @@ use super::*;
 use std::sync::atomic::Ordering;
 use std::thread;
 
-fn head_tail<T>(rb: &RingBuffer<T>) -> (usize, usize) {
+fn head_tail(rb: &RingBuffer) -> (usize, usize) {
     (
         rb.head.load(Ordering::Acquire),
         rb.tail.load(Ordering::Acquire),
@@ -32,13 +32,14 @@ fn head_tail<T>(rb: &RingBuffer<T>) -> (usize, usize) {
 #[test]
 fn capacity() {
     let cap = 13;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     assert_eq!(buf.capacity(), cap);
 }
+
 #[test]
 fn split_capacity() {
     let cap = 13;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     let (prod, cons) = buf.split();
 
     assert_eq!(prod.capacity(), cap);
@@ -47,7 +48,7 @@ fn split_capacity() {
 
 #[test]
 fn split_threads() {
-    let buf = RingBuffer::<i32>::new(10);
+    let buf = RingBuffer::new(10);
     let (prod, cons) = buf.split();
 
     let pjh = thread::spawn(move || {
@@ -65,25 +66,25 @@ fn split_threads() {
 #[test]
 fn push() {
     let cap = 2;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     let (mut prod, _) = buf.split();
 
     assert_eq!(head_tail(&prod.rb), (0, 0));
 
-    assert_eq!(prod.push(123), Ok(()));
+    assert_eq!(prod.push(12), Ok(()));
     assert_eq!(head_tail(&prod.rb), (0, 1));
 
-    assert_eq!(prod.push(234), Ok(()));
+    assert_eq!(prod.push(34), Ok(()));
     assert_eq!(head_tail(&prod.rb), (0, 2));
 
-    assert_eq!(prod.push(345), Err(345));
+    assert_eq!(prod.push(34), Err(34));
     assert_eq!(head_tail(&prod.rb), (0, 2));
 }
 
 #[test]
 fn pop_empty() {
     let cap = 2;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     let (_, mut cons) = buf.split();
 
     assert_eq!(head_tail(&cons.rb), (0, 0));
@@ -95,7 +96,7 @@ fn pop_empty() {
 #[test]
 fn push_pop_one() {
     let cap = 2;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     let (mut prod, mut cons) = buf.split();
 
     let vcap = cap + 1;
@@ -117,7 +118,7 @@ fn push_pop_one() {
 #[test]
 fn push_pop_all() {
     let cap = 2;
-    let buf = RingBuffer::<i32>::new(cap);
+    let buf = RingBuffer::new(cap);
     let (mut prod, mut cons) = buf.split();
 
     let vcap = cap + 1;
@@ -156,7 +157,7 @@ fn push_pop_all() {
 
 #[test]
 fn empty_full() {
-    let buf = RingBuffer::<i32>::new(1);
+    let buf = RingBuffer::new(1);
     let (mut prod, cons) = buf.split();
 
     assert!(prod.is_empty());
@@ -174,7 +175,7 @@ fn empty_full() {
 
 #[test]
 fn len_remaining() {
-    let buf = RingBuffer::<i32>::new(2);
+    let buf = RingBuffer::new(2);
     let (mut prod, mut cons) = buf.split();
 
     assert_eq!(prod.len(), 0);
@@ -182,28 +183,28 @@ fn len_remaining() {
     assert_eq!(prod.remaining(), 2);
     assert_eq!(cons.remaining(), 2);
 
-    assert_eq!(prod.push(123), Ok(()));
+    assert_eq!(prod.push(12), Ok(()));
 
     assert_eq!(prod.len(), 1);
     assert_eq!(cons.len(), 1);
     assert_eq!(prod.remaining(), 1);
     assert_eq!(cons.remaining(), 1);
 
-    assert_eq!(prod.push(456), Ok(()));
+    assert_eq!(prod.push(34), Ok(()));
 
     assert_eq!(prod.len(), 2);
     assert_eq!(cons.len(), 2);
     assert_eq!(prod.remaining(), 0);
     assert_eq!(cons.remaining(), 0);
 
-    assert_eq!(cons.pop(), Some(123));
+    assert_eq!(cons.pop(), Some(12));
 
     assert_eq!(prod.len(), 1);
     assert_eq!(cons.len(), 1);
     assert_eq!(prod.remaining(), 1);
     assert_eq!(cons.remaining(), 1);
 
-    assert_eq!(cons.pop(), Some(456));
+    assert_eq!(cons.pop(), Some(34));
 
     assert_eq!(prod.len(), 0);
     assert_eq!(cons.len(), 0);
@@ -211,8 +212,8 @@ fn len_remaining() {
     assert_eq!(cons.remaining(), 2);
 
     // now head is at 2, so tail will be at 0. This caught an overflow error
-    // when tail+1 < head because of the substraction of usize.
-    assert_eq!(prod.push(789), Ok(()));
+    // when tail+1 < head because of the subtraction of usize.
+    assert_eq!(prod.push(56), Ok(()));
 
     assert_eq!(prod.len(), 1);
     assert_eq!(cons.len(), 1);

@@ -87,7 +87,7 @@ fn push_pop_slice() {
 
 #[test]
 fn read_from_write_into() {
-    let buf = RingBuffer::<u8>::new(7);
+    let buf = RingBuffer::new(7);
     let (mut prod, mut cons) = buf.split();
 
     let smsg = THE_BOOK_FOREWORD;
@@ -130,7 +130,7 @@ fn read_from_write_into() {
 
 #[test]
 fn read_write() {
-    let buf = RingBuffer::<u8>::new(7);
+    let buf = RingBuffer::new(7);
     let (mut prod, mut cons) = buf.split();
 
     let smsg = THE_BOOK_FOREWORD;
