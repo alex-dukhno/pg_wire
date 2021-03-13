@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{request_codes::Code, Oid, PgType};
 use std::{
     fmt::{self, Display, Formatter},
     num::ParseIntError,
     str::Utf8Error,
 };
-use crate::{request_codes::Code, Oid, PgType};
 
 #[derive(Debug, PartialEq)]
 pub struct HandShakeError<'e> {
-    kind: HandShakeErrorKind<'e>
+    kind: HandShakeErrorKind<'e>,
 }
 
 impl<'e> Display for HandShakeError<'e> {
@@ -29,7 +29,6 @@ impl<'e> Display for HandShakeError<'e> {
         match &self.kind {
             HandShakeErrorKind::UnsupportedProtocolVersion(code) => write!(f, "{}", code),
             HandShakeErrorKind::UnsupportedClientRequest(code) => write!(f, "{}", code),
-            HandShakeErrorKind::VerificationFailed => write!(f, "Verification Failed"),
             HandShakeErrorKind::PayloadError(error) => write!(f, "{}", error),
         }
     }
@@ -43,7 +42,9 @@ impl<'e> From<HandShakeErrorKind<'e>> for HandShakeError<'e> {
 
 impl<'e> From<PayloadError<'e>> for HandShakeError<'e> {
     fn from(error: PayloadError<'e>) -> HandShakeError {
-        HandShakeError { kind: HandShakeErrorKind::PayloadError(error) }
+        HandShakeError {
+            kind: HandShakeErrorKind::PayloadError(error),
+        }
     }
 }
 
@@ -51,8 +52,7 @@ impl<'e> From<PayloadError<'e>> for HandShakeError<'e> {
 pub(crate) enum HandShakeErrorKind<'e> {
     UnsupportedProtocolVersion(Code),
     UnsupportedClientRequest(Code),
-    VerificationFailed,
-    PayloadError(PayloadError<'e>)
+    PayloadError(PayloadError<'e>),
 }
 
 /// Represents an error if frontend sent unrecognizable format
@@ -253,63 +253,9 @@ pub(crate) enum PayloadErrorKind<'e> {
     NotEnoughBytes { required: u8, source: &'e [u8] },
 }
 
-// temporal WA while API is changing
-impl<'e> From<PayloadError<'e>> for Error {
-    fn from(error: PayloadError<'_>) -> Self {
-        match error.kind {
-            PayloadErrorKind::InvalidUtfString { .. } => Error::InvalidUtfString,
-            PayloadErrorKind::CStringNotTerminated { .. } => Error::ZeroByteNotFound,
-            PayloadErrorKind::EndOfBuffer => Error::InvalidInput("No byte to read".to_owned()),
-            PayloadErrorKind::NotEnoughBytes { .. } => {
-                Error::InvalidInput("not enough buffer to read 32bit Int".to_owned())
-            }
-        }
-    }
-}
-
-/// `Error` type in protocol `Result`. Indicates that something went not well
-#[derive(Debug, PartialEq)]
-pub enum Error {
-    /// Indicates that not supported `Oid` was used to transfer info
-    NotSupportedOid(Oid),
-    /// Indicates that incoming data is invalid
-    InvalidInput(String),
-    /// Indicates that incoming data can't be parsed as UTF-8 string
-    InvalidUtfString,
-    /// Indicates that incoming string is not terminated by zero byte
-    ZeroByteNotFound,
-    /// Indicates that frontend message is not supported
-    UnsupportedFrontendMessage,
-    /// Indicates that protocol version is not supported
-    UnsupportedVersion(Code),
-    /// Indicates that client request is not supported
-    UnsupportedRequest(Code),
-    /// Indicates that connection verification is failed
-    VerificationFailed,
-}
-
-impl From<UnrecognizedFormat> for Error {
-    fn from(error: UnrecognizedFormat) -> Error {
-        Error::InvalidInput(format!("unknown format code: {}", error.0))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[cfg(test)]
-    mod error_conversion {
-        use super::*;
-
-        #[test]
-        fn from_unrecognized_format() {
-            assert_eq!(
-                Error::from(UnrecognizedFormat(100)),
-                Error::InvalidInput("unknown format code: 100".to_owned())
-            );
-        }
-    }
 
     #[cfg(test)]
     mod payload_error {

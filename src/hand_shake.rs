@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConnId, ConnSecretKey, cursor::Cursor};
 use crate::{
+    cursor::Cursor,
+    errors::{HandShakeError, HandShakeErrorKind},
     request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
+    ConnId, ConnSecretKey,
 };
-use crate::errors::{HandShakeError, HandShakeErrorKind};
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum State {
@@ -76,45 +77,47 @@ impl Process {
                 self.state = Some(State::MessageLen);
                 Ok(Status::RequestingBytes(4))
             }
-            Some((state, bytes)) => {
-                match state {
-                    State::MessageLen => {
-                        let mut buffer = Cursor::from(bytes);
-                        let len = buffer.read_i32()?;
-                        self.state = Some(State::ParseSetup);
-                        Ok(Status::RequestingBytes((len - 4) as usize))
-                    }
-                    State::ParseSetup => {
-                        let mut buffer = Cursor::from(bytes);
-                        let code = Code(buffer.read_i32()?);
-                        match code {
-                            VERSION_1_CODE | VERSION_2_CODE => Err(HandShakeError::from(HandShakeErrorKind::UnsupportedProtocolVersion(code))),
-                            VERSION_3_CODE => {
-                                let mut props = vec![];
-                                loop {
-                                    let key = buffer.read_cstr()?.to_owned();
-                                    if key.is_empty() {
-                                        break;
-                                    }
-                                    let value = buffer.read_cstr()?.to_owned();
-                                    props.push((key, value));
+            Some((state, bytes)) => match state {
+                State::MessageLen => {
+                    let mut buffer = Cursor::from(bytes);
+                    let len = buffer.read_i32()?;
+                    self.state = Some(State::ParseSetup);
+                    Ok(Status::RequestingBytes((len - 4) as usize))
+                }
+                State::ParseSetup => {
+                    let mut buffer = Cursor::from(bytes);
+                    let code = Code(buffer.read_i32()?);
+                    match code {
+                        VERSION_1_CODE | VERSION_2_CODE => Err(HandShakeError::from(
+                            HandShakeErrorKind::UnsupportedProtocolVersion(code),
+                        )),
+                        VERSION_3_CODE => {
+                            let mut props = vec![];
+                            loop {
+                                let key = buffer.read_cstr()?.to_owned();
+                                if key.is_empty() {
+                                    break;
                                 }
-                                Ok(Status::Done(props))
+                                let value = buffer.read_cstr()?.to_owned();
+                                props.push((key, value));
                             }
-                            CANCEL_REQUEST_CODE => {
-                                let conn_id = buffer.read_i32()?;
-                                let secret_key = buffer.read_i32()?;
-                                Ok(Status::Cancel(conn_id, secret_key))
-                            }
-                            SSL_REQUEST_CODE => {
-                                self.state = Some(State::MessageLen);
-                                Ok(Status::UpdatingToSecureWithReadingBytes(4))
-                            }
-                            otherwise => Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(otherwise))),
+                            Ok(Status::Done(props))
                         }
+                        CANCEL_REQUEST_CODE => {
+                            let conn_id = buffer.read_i32()?;
+                            let secret_key = buffer.read_i32()?;
+                            Ok(Status::Cancel(conn_id, secret_key))
+                        }
+                        SSL_REQUEST_CODE => {
+                            self.state = Some(State::MessageLen);
+                            Ok(Status::UpdatingToSecureWithReadingBytes(4))
+                        }
+                        otherwise => Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(
+                            otherwise,
+                        ))),
                     }
                 }
-            }
+            },
         }
     }
 }
@@ -122,8 +125,9 @@ impl Process {
 /// Represents status of the [HandShakeProcess](Process) stages
 #[derive(Debug, PartialEq)]
 pub enum Status {
-    /// Hand shake process requesting additional data or action to proceed further
+    /// Hand shake process requesting additional data to proceed further
     RequestingBytes(usize),
+    /// Hand shake process requesting update to SSL and additional data to proceed further
     UpdatingToSecureWithReadingBytes(usize),
     /// Hand shake is finished. Contains client runtime settings, e.g. database, username
     Done(Vec<(String, String)>),
