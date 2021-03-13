@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConnId, ConnSecretKey, Error, cursor::Cursor};
+use crate::{ConnId, ConnSecretKey, cursor::Cursor};
 use crate::{
     request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
 };
+use crate::errors::{HandShakeError, HandShakeErrorKind};
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum State {
     MessageLen,
     ParseSetup,
-    SetupParsed,
+    Secure
 }
 
 /// Encapsulate protocol hand shake process
@@ -70,7 +71,7 @@ impl Process {
     }
 
     /// Proceed to the next stage of client <-> server hand shake
-    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status, Error> {
+    pub fn next_stage<'e>(&mut self, payload: Option<&'e [u8]>) -> Result<Status, HandShakeError<'e>> {
         match self.state.take() {
             None => {
                 self.state = Some(State::MessageLen);
@@ -78,17 +79,18 @@ impl Process {
             }
             Some(state) => {
                 if let Some(bytes) = payload {
-                    let mut buffer = Cursor::from(bytes);
                     match state {
                         State::MessageLen => {
+                            let mut buffer = Cursor::from(bytes);
                             let len = buffer.read_i32()?;
                             self.state = Some(State::ParseSetup);
                             Ok(Status::Requesting(Request::Buffer((len - 4) as usize)))
                         },
                         State::ParseSetup => {
+                            let mut buffer = Cursor::from(bytes);
                             let code = Code(buffer.read_i32()?);
                             match code {
-                                VERSION_1_CODE | VERSION_2_CODE => Err(Error::UnsupportedVersion(code)),
+                                VERSION_1_CODE | VERSION_2_CODE => Err(HandShakeError::from(HandShakeErrorKind::UnsupportedProtocolVersion(code))),
                                 VERSION_3_CODE => {
                                     let mut props = vec![];
                                     loop {
@@ -99,31 +101,29 @@ impl Process {
                                         let value = buffer.read_cstr()?.to_owned();
                                         props.push((key, value));
                                     }
-                                    self.state = Some(State::SetupParsed);
                                     Ok(Status::Done(props))
                                 }
                                 CANCEL_REQUEST_CODE => {
                                     let conn_id = buffer.read_i32()?;
                                     let secret_key = buffer.read_i32()?;
-                                    self.state = Some(State::SetupParsed);
                                     Ok(Status::Cancel(conn_id, secret_key))
                                 }
                                 SSL_REQUEST_CODE => {
-                                    self.state = Some(State::SetupParsed);
+                                    self.state = Some(State::Secure);
                                     Ok(Status::Requesting(Request::UpgradeToSsl))
                                 },
-                                otherwise => Err(Error::UnsupportedRequest(otherwise)),
+                                otherwise => Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(otherwise))),
                             }
                         },
-                        _ => Err(Error::VerificationFailed),
+                        _ => Err(HandShakeError::from(HandShakeErrorKind::VerificationFailed)),
                     }
                 } else {
                     match state {
-                        State::SetupParsed => {
+                        State::Secure => {
                             self.state = Some(State::MessageLen);
                             Ok(Status::Requesting(Request::Buffer(4)))
                         },
-                        _ => Err(Error::VerificationFailed),
+                        _ => Err(HandShakeError::from(HandShakeErrorKind::VerificationFailed)),
                     }
                 }
             }

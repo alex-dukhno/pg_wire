@@ -66,7 +66,7 @@ pub struct MessageDecoder {
 
 impl MessageDecoder {
     /// Proceed to the next stage of decoding received message
-    pub fn next_stage<'e>(&'e mut self, payload: Option<&'e [u8]>) -> Result<Status, MessageFormatError<'e>> {
+    pub fn next_stage<'e>(&mut self, payload: Option<&'e [u8]>) -> Result<Status, MessageFormatError<'e>> {
         let buf = if let Some(payload) = payload { payload } else { &[] };
         match self.state.take() {
             None => {

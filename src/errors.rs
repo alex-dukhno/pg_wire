@@ -17,8 +17,32 @@ use std::{
     num::ParseIntError,
     str::Utf8Error,
 };
-
 use crate::{request_codes::Code, Oid, PgType};
+
+#[derive(Debug, PartialEq)]
+pub struct HandShakeError<'e> {
+    kind: HandShakeErrorKind<'e>
+}
+
+impl<'e> From<HandShakeErrorKind<'e>> for HandShakeError<'e> {
+    fn from(kind: HandShakeErrorKind) -> HandShakeError {
+        HandShakeError { kind }
+    }
+}
+
+impl<'e> From<PayloadError<'e>> for HandShakeError<'e> {
+    fn from(error: PayloadError<'e>) -> HandShakeError {
+        HandShakeError { kind: HandShakeErrorKind::PayloadError(error) }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) enum HandShakeErrorKind<'e> {
+    UnsupportedProtocolVersion(Code),
+    UnsupportedClientRequest(Code),
+    VerificationFailed,
+    PayloadError(PayloadError<'e>)
+}
 
 /// Represents an error if frontend sent unrecognizable format
 /// contains the integer code that was sent
