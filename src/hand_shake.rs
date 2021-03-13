@@ -16,7 +16,7 @@ use crate::{
     cursor::Cursor,
     errors::{HandShakeError, HandShakeErrorKind},
     request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
-    ConnId, ConnSecretKey,
+    ClientParams, ConnId, ConnSecretKey,
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -132,7 +132,7 @@ pub enum Status {
     /// Hand shake process requesting update to SSL and additional data to proceed further
     UpdatingToSecureWithReadingBytes(usize),
     /// Hand shake is finished. Contains client runtime settings, e.g. database, username
-    Done(Vec<(String, String)>),
+    Done(ClientParams),
     /// Hand shake is for canceling request that is executed on `ConnId`
     Cancel(ConnId, ConnSecretKey),
 }

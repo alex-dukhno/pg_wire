@@ -27,10 +27,9 @@ mod errors;
 mod format;
 mod hand_shake;
 mod message_decoder;
-/// Module contains backend messages that could be send by server implementation
-/// to a client
 mod messages;
 mod request_codes;
+mod ringbuf;
 mod types;
 
 /// Connection key-value params
