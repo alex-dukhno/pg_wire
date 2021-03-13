@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryFrom;
-
 use crate::errors::UnrecognizedFormat;
+use std::convert::TryFrom;
 
 /// PostgreSQL formats for transferring data
 /// `0` - textual representation

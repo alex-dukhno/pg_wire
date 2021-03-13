@@ -25,9 +25,6 @@ use std::convert::TryFrom;
 pub enum Status {
     /// `MessageDecoder` requests buffer with specified size
     Requesting(usize),
-    /// `MessageDecoder` is in a process of decoding and decoded front message will be available
-    /// after the next stage
-    Decoding,
     /// `MessageDecoder` has decoded a message and returns it content
     Done(FrontendMessage),
 }
@@ -56,7 +53,6 @@ pub(crate) enum State {
 ///             channel.read_exact(&mut buffer)?;
 ///             current = Some(buffer);
 ///         }
-///         Ok(MessageDecoderStatus::Decoding) => {}
 ///         Ok(MessageDecoderStatus::Done(message)) => return Ok(Ok(message)),
 ///         Err(error) => return Err(error),
 ///     }
@@ -70,7 +66,7 @@ pub struct MessageDecoder {
 
 impl MessageDecoder {
     /// Proceed to the next stage of decoding received message
-    pub fn next_stage<'e>(&'e mut self, payload: Option<&'e [u8]>) -> Result<Status, MessageFormatError<'e>> {
+    pub fn next_stage<'e>(&mut self, payload: Option<&'e [u8]>) -> Result<Status, MessageFormatError<'e>> {
         let buf = if let Some(payload) = payload { payload } else { &[] };
         match self.state.take() {
             None => {
@@ -98,8 +94,6 @@ impl MessageDecoder {
     }
 
     fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, MessageFormatError> {
-        log::debug!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
-
         let mut cursor = Cursor::from(buffer);
         match tag {
             // Simple query flow.
@@ -181,7 +175,6 @@ impl MessageDecoder {
                 let mut param_types = vec![];
                 for _ in 0..cursor.read_i16()? {
                     let pg_type = PgType::from_oid(cursor.read_u32()?)?;
-                    log::trace!("received parameter of {:?} PostgreSQL Type", pg_type);
                     param_types.push(pg_type);
                 }
 

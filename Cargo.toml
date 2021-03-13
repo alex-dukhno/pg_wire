@@ -11,6 +11,3 @@ include = [
     "src/**/*.rs",
     "Cargo.toml",
 ]
-
-[dependencies]
-log = "0.4.11"

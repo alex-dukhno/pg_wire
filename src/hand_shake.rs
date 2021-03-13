@@ -12,10 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConnId, ConnSecretKey, Error};
-use state::{MessageLen, ReadSetupMessage, SetupParsed, State};
+use crate::{
+    cursor::Cursor,
+    errors::{HandShakeError, HandShakeErrorKind},
+    request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
+    ConnId, ConnSecretKey,
+};
 
-mod state;
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum State {
+    MessageLen,
+    ParseSetup,
+}
 
 /// Encapsulate protocol hand shake process
 ///
@@ -29,13 +37,15 @@ mod state;
 /// let mut buffer: Option<Vec<u8>> = None;
 /// loop {
 ///     match process.next_stage(buffer.as_deref()) {
-///         Ok(HandShakeStatus::Requesting(HandShakeRequest::Buffer(len))) => {
+///         Ok(HandShakeStatus::RequestingBytes(len)) => {
 ///             let mut buf = vec![b'0'; len];
-///             buffer = Some(stream.read(&mut buf));
+///             buffer = Some(stream.read(&mut buf)?);
 ///         }
-///         Ok(HandShakeStatus::Requesting(HandShakeRequest::UpgradeToSsl)) => {
+///         Ok(HandShakeStatus::UpdatingToSecureWithReadingBytes(len)) => {
 ///             stream.write_all(&[b'S']); // accepting tls connection from client
 ///             stream = tls_stream(stream);
+///             let mut buf = vec![b'0'; len];
+///             buffer = Some(stream.read_exact(&mut buf)?);
 ///         }
 ///         Ok(HandShakeStatus::Cancel(conn_id, secret_key)) => {
 ///             handle_request_cancellation(conn_id, secret_key);
@@ -63,31 +73,53 @@ impl Process {
     }
 
     /// Proceed to the next stage of client <-> server hand shake
-    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status, Error> {
-        match self.state.take() {
+    pub fn next_stage<'e>(&mut self, payload: Option<&'e [u8]>) -> Result<Status, HandShakeError<'e>> {
+        match self.state.take().and_then(|state| payload.map(|buf| (state, buf))) {
             None => {
-                self.state = Some(State::new());
-                Ok(Status::Requesting(Request::Buffer(4)))
+                self.state = Some(State::MessageLen);
+                Ok(Status::RequestingBytes(4))
             }
-            Some(state) => {
-                if let Some(bytes) = payload {
-                    let new_state = state.try_step(bytes)?;
-                    let result = match new_state.clone() {
-                        State::ParseSetup(ReadSetupMessage(len)) => Ok(Status::Requesting(Request::Buffer(len))),
-                        State::MessageLen(MessageLen(len)) => Ok(Status::Requesting(Request::Buffer(len))),
-                        State::SetupParsed(SetupParsed::Established(props)) => Ok(Status::Done(props)),
-                        State::SetupParsed(SetupParsed::Secure) => Ok(Status::Requesting(Request::UpgradeToSsl)),
-                        State::SetupParsed(SetupParsed::Cancel(conn_id, secret_key)) => {
+            Some((state, bytes)) => match state {
+                State::MessageLen => {
+                    let mut buffer = Cursor::from(bytes);
+                    let len = buffer.read_i32()?;
+                    self.state = Some(State::ParseSetup);
+                    Ok(Status::RequestingBytes((len - 4) as usize))
+                }
+                State::ParseSetup => {
+                    let mut buffer = Cursor::from(bytes);
+                    let code = Code(buffer.read_i32()?);
+                    match code {
+                        VERSION_1_CODE | VERSION_2_CODE => Err(HandShakeError::from(
+                            HandShakeErrorKind::UnsupportedProtocolVersion(code),
+                        )),
+                        VERSION_3_CODE => {
+                            let mut props = vec![];
+                            loop {
+                                let key = buffer.read_cstr()?.to_owned();
+                                if key.is_empty() {
+                                    break;
+                                }
+                                let value = buffer.read_cstr()?.to_owned();
+                                props.push((key, value));
+                            }
+                            Ok(Status::Done(props))
+                        }
+                        CANCEL_REQUEST_CODE => {
+                            let conn_id = buffer.read_i32()?;
+                            let secret_key = buffer.read_i32()?;
                             Ok(Status::Cancel(conn_id, secret_key))
                         }
-                    };
-                    self.state = Some(new_state);
-                    result
-                } else {
-                    self.state = Some(state.try_step(&[])?);
-                    Ok(Status::Requesting(Request::Buffer(4)))
+                        SSL_REQUEST_CODE => {
+                            self.state = Some(State::MessageLen);
+                            Ok(Status::UpdatingToSecureWithReadingBytes(4))
+                        }
+                        otherwise => Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(
+                            otherwise,
+                        ))),
+                    }
                 }
-            }
+            },
         }
     }
 }
@@ -95,8 +127,10 @@ impl Process {
 /// Represents status of the [HandShakeProcess](Process) stages
 #[derive(Debug, PartialEq)]
 pub enum Status {
-    /// Hand shake process requesting additional data or action to proceed further
-    Requesting(Request),
+    /// Hand shake process requesting additional data to proceed further
+    RequestingBytes(usize),
+    /// Hand shake process requesting update to SSL and additional data to proceed further
+    UpdatingToSecureWithReadingBytes(usize),
     /// Hand shake is finished. Contains client runtime settings, e.g. database, username
     Done(Vec<(String, String)>),
     /// Hand shake is for canceling request that is executed on `ConnId`
@@ -120,7 +154,7 @@ mod perform_hand_shake_loop {
     #[test]
     fn init_hand_shake_process() {
         let mut process = Process::start();
-        assert_eq!(process.next_stage(None), Ok(Status::Requesting(Request::Buffer(4))));
+        assert_eq!(process.next_stage(None), Ok(Status::RequestingBytes(4)));
     }
 
     #[test]
@@ -130,7 +164,7 @@ mod perform_hand_shake_loop {
         process.next_stage(None).expect("proceed to the next stage");
         assert_eq!(
             process.next_stage(Some(&[0, 0, 0, 33])),
-            Ok(Status::Requesting(Request::Buffer(29)))
+            Ok(Status::RequestingBytes(29))
         );
     }
 
@@ -171,10 +205,9 @@ mod perform_hand_shake_loop {
 
         assert_eq!(
             process.next_stage(Some(&Vec::from(SSL_REQUEST_CODE))),
-            Ok(Status::Requesting(Request::UpgradeToSsl))
+            Ok(Status::UpdatingToSecureWithReadingBytes(4))
         );
 
-        process.next_stage(None).expect("proceed to the next stage");
         process
             .next_stage(Some(&[0, 0, 0, 33]))
             .expect("proceed to the next stage");
