@@ -94,8 +94,6 @@ impl MessageDecoder {
     }
 
     fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, MessageFormatError> {
-        log::debug!("Receives frontend tag = {:?}, buffer = {:?}", char::from(tag), buffer);
-
         let mut cursor = Cursor::from(buffer);
         match tag {
             // Simple query flow.
@@ -177,7 +175,6 @@ impl MessageDecoder {
                 let mut param_types = vec![];
                 for _ in 0..cursor.read_i16()? {
                     let pg_type = PgType::from_oid(cursor.read_u32()?)?;
-                    log::trace!("received parameter of {:?} PostgreSQL Type", pg_type);
                     param_types.push(pg_type);
                 }
 
