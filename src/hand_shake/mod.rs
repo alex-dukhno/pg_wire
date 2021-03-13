@@ -18,17 +18,10 @@ use crate::{
 };
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) enum SetupParsed {
-    Established(Vec<(String, String)>),
-    Cancel(ConnId, ConnSecretKey),
-    Secure,
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub(crate) enum State {
     MessageLen,
     ParseSetup,
-    SetupParsed(SetupParsed),
+    SetupParsed,
 }
 
 /// Encapsulate protocol hand shake process
@@ -86,15 +79,16 @@ impl Process {
             Some(state) => {
                 if let Some(bytes) = payload {
                     let mut buffer = Cursor::from(bytes);
-                    let (result, new_state) = match state {
+                    match state {
                         State::MessageLen => {
                             let len = buffer.read_i32()?;
-                            (Status::Requesting(Request::Buffer((len - 4) as usize)), State::ParseSetup)
+                            self.state = Some(State::ParseSetup);
+                            Ok(Status::Requesting(Request::Buffer((len - 4) as usize)))
                         },
                         State::ParseSetup => {
                             let code = Code(buffer.read_i32()?);
                             match code {
-                                VERSION_1_CODE | VERSION_2_CODE => return Err(Error::UnsupportedVersion(code)),
+                                VERSION_1_CODE | VERSION_2_CODE => Err(Error::UnsupportedVersion(code)),
                                 VERSION_3_CODE => {
                                     let mut props = vec![];
                                     loop {
@@ -105,27 +99,32 @@ impl Process {
                                         let value = buffer.read_cstr()?.to_owned();
                                         props.push((key, value));
                                     }
-                                    (Status::Done(props.clone()), State::SetupParsed(SetupParsed::Established(props)))
+                                    self.state = Some(State::SetupParsed);
+                                    Ok(Status::Done(props))
                                 }
                                 CANCEL_REQUEST_CODE => {
                                     let conn_id = buffer.read_i32()?;
                                     let secret_key = buffer.read_i32()?;
-                                    (Status::Cancel(conn_id, secret_key), State::SetupParsed(SetupParsed::Cancel(conn_id, secret_key)))
+                                    self.state = Some(State::SetupParsed);
+                                    Ok(Status::Cancel(conn_id, secret_key))
                                 }
-                                SSL_REQUEST_CODE => (Status::Requesting(Request::UpgradeToSsl), State::SetupParsed(SetupParsed::Secure)),
-                                otherwise => return Err(Error::UnsupportedRequest(otherwise)),
+                                SSL_REQUEST_CODE => {
+                                    self.state = Some(State::SetupParsed);
+                                    Ok(Status::Requesting(Request::UpgradeToSsl))
+                                },
+                                otherwise => Err(Error::UnsupportedRequest(otherwise)),
                             }
                         },
-                        _ => return Err(Error::VerificationFailed),
-                    };
-                    self.state = Some(new_state);
-                    Ok(result)
+                        _ => Err(Error::VerificationFailed),
+                    }
                 } else {
-                    self.state = match state {
-                        State::SetupParsed(SetupParsed::Secure) => Some(State::MessageLen),
-                        _ => return Err(Error::VerificationFailed),
-                    };
-                    Ok(Status::Requesting(Request::Buffer(4)))
+                    match state {
+                        State::SetupParsed => {
+                            self.state = Some(State::MessageLen);
+                            Ok(Status::Requesting(Request::Buffer(4)))
+                        },
+                        _ => Err(Error::VerificationFailed),
+                    }
                 }
             }
         }
