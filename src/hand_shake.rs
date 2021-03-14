@@ -195,6 +195,56 @@ mod perform_hand_shake_loop {
     }
 
     #[test]
+    fn not_supported_version() {
+        let mut process = Process::start();
+
+        process.next_stage(None).expect("proceed to the next stage");
+        process
+            .next_stage(Some(&[0, 0, 0, 33]))
+            .expect("proceed to the next stage");
+
+        let mut payload = vec![];
+        payload.extend_from_slice(&Vec::from(VERSION_2_CODE));
+        payload.extend_from_slice(b"key1\0");
+        payload.extend_from_slice(b"value1\0");
+        payload.extend_from_slice(b"key2\0");
+        payload.extend_from_slice(b"value2\0");
+        payload.extend_from_slice(&[0]);
+
+        assert_eq!(
+            process.next_stage(Some(&payload)),
+            Err(HandShakeError::from(HandShakeErrorKind::UnsupportedProtocolVersion(
+                VERSION_2_CODE
+            )))
+        );
+    }
+
+    #[test]
+    fn not_supported_client_request() {
+        let mut process = Process::start();
+
+        process.next_stage(None).expect("proceed to the next stage");
+        process
+            .next_stage(Some(&[0, 0, 0, 33]))
+            .expect("proceed to the next stage");
+
+        let mut payload = vec![];
+        payload.extend_from_slice(&[0x11, 0x22, 0x33, 0x44]);
+        payload.extend_from_slice(b"key1\0");
+        payload.extend_from_slice(b"value1\0");
+        payload.extend_from_slice(b"key2\0");
+        payload.extend_from_slice(b"value2\0");
+        payload.extend_from_slice(&[0]);
+
+        assert_eq!(
+            process.next_stage(Some(&payload)),
+            Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(
+                Code(0x11_22_33_44)
+            )))
+        );
+    }
+
+    #[test]
     fn ssl_secure_connection_hand_shake() {
         let mut process = Process::start();
 

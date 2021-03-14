@@ -27,12 +27,6 @@ impl<'c> From<&'c [u8]> for Cursor<'c> {
     }
 }
 
-impl<'c> From<&'c Cursor<'c>> for Vec<u8> {
-    fn from(cur: &'c Cursor<'c>) -> Vec<u8> {
-        cur.buf.to_vec()
-    }
-}
-
 impl<'c> Cursor<'c> {
     fn advance(&mut self, n: usize) {
         self.buf = &self.buf[n..]
