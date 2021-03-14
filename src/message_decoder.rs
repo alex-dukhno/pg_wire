@@ -219,7 +219,10 @@ mod tests {
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
-            assert_eq!(decoder.next_stage(Some(&[])), Err(MessageFormatError::from(MessageFormatErrorKind::MissingMessageTag)));
+            assert_eq!(
+                decoder.next_stage(Some(&[])),
+                Err(MessageFormatError::from(MessageFormatErrorKind::MissingMessageTag))
+            );
         }
 
         #[test]
@@ -307,11 +310,9 @@ mod tests {
         #[test]
         fn bind() {
             let buffer = [
-                112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0,
-                115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110, 97, 109, 101, 0,
-                0, 3, 0, 1, 0, 1, 0, 1,
-                0, 3, 255, 255, 255, 255, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2,
-                0, 3, 0, 0, 0, 0, 0, 0
+                112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95,
+                110, 97, 109, 101, 0, 0, 3, 0, 1, 0, 1, 0, 1, 0, 3, 255, 255, 255, 255, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0,
+                0, 4, 0, 0, 0, 2, 0, 3, 0, 0, 0, 0, 0, 0,
             ];
             let mut decoder = MessageDecoder::default();
 
@@ -436,7 +437,9 @@ mod tests {
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
-            decoder.next_stage(Some(&[DESCRIBE])).expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&[DESCRIBE]))
+                .expect("proceed to the next stage");
             decoder
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
@@ -551,16 +554,16 @@ mod tests {
             let mut decoder = MessageDecoder::default();
 
             decoder.next_stage(None).expect("proceed to the next stage");
-            decoder
-                .next_stage(Some(&[b'A']))
-                .expect("proceed to the next stage");
+            decoder.next_stage(Some(&[b'A'])).expect("proceed to the next stage");
             decoder
                 .next_stage(Some(&LEN.to_be_bytes()))
                 .expect("proceed to the next stage");
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Err(MessageFormatError::from(MessageFormatErrorKind::UnsupportedFrontendMessage('A')))
+                Err(MessageFormatError::from(
+                    MessageFormatErrorKind::UnsupportedFrontendMessage('A')
+                ))
             );
         }
     }

@@ -213,7 +213,9 @@ mod perform_hand_shake_loop {
 
         assert_eq!(
             process.next_stage(Some(&payload)),
-            Err(HandShakeError::from(HandShakeErrorKind::UnsupportedProtocolVersion(VERSION_2_CODE)))
+            Err(HandShakeError::from(HandShakeErrorKind::UnsupportedProtocolVersion(
+                VERSION_2_CODE
+            )))
         );
     }
 
@@ -236,7 +238,9 @@ mod perform_hand_shake_loop {
 
         assert_eq!(
             process.next_stage(Some(&payload)),
-            Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(Code(0x11_22_33_44))))
+            Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(
+                Code(0x11_22_33_44)
+            )))
         );
     }
 
