@@ -215,6 +215,14 @@ mod tests {
         }
 
         #[test]
+        fn no_message_tag() {
+            let mut decoder = MessageDecoder::default();
+
+            decoder.next_stage(None).expect("proceed to the next stage");
+            assert_eq!(decoder.next_stage(Some(&[])), Err(MessageFormatError::from(MessageFormatErrorKind::MissingMessageTag)));
+        }
+
+        #[test]
         fn request_message_len() {
             let mut decoder = MessageDecoder::default();
 
@@ -299,8 +307,11 @@ mod tests {
         #[test]
         fn bind() {
             let buffer = [
-                112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95,
-                110, 97, 109, 101, 0, 0, 2, 0, 1, 0, 1, 0, 2, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2, 0, 0,
+                112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0,
+                115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110, 97, 109, 101, 0,
+                0, 3, 0, 1, 0, 1, 0, 1,
+                0, 3, 255, 255, 255, 255, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 2,
+                0, 3, 0, 0, 0, 0, 0, 0
             ];
             let mut decoder = MessageDecoder::default();
 
@@ -315,9 +326,9 @@ mod tests {
                 Ok(Status::Done(FrontendMessage::Bind {
                     portal_name: "portal_name".to_owned(),
                     statement_name: "statement_name".to_owned(),
-                    param_formats: vec![PgFormat::Binary, PgFormat::Binary],
-                    raw_params: vec![Some(vec![0, 0, 0, 1]), Some(vec![0, 0, 0, 2])],
-                    result_formats: vec![],
+                    param_formats: vec![PgFormat::Binary, PgFormat::Binary, PgFormat::Binary],
+                    raw_params: vec![None, Some(vec![0, 0, 0, 1]), Some(vec![0, 0, 0, 2])],
+                    result_formats: vec![PgFormat::Text, PgFormat::Text, PgFormat::Text],
                 }))
             );
         }
@@ -361,6 +372,23 @@ mod tests {
         }
 
         #[test]
+        fn close_unknown_type() {
+            let buffer = [82, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110, 97, 109, 101, 0];
+            let mut decoder = MessageDecoder::default();
+
+            decoder.next_stage(None).expect("proceed to the next stage");
+            decoder.next_stage(Some(&[CLOSE])).expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&LEN.to_be_bytes()))
+                .expect("proceed to the next stage");
+
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte('R')))
+            );
+        }
+
+        #[test]
         fn describe_portal() {
             let buffer = [80, 112, 111, 114, 116, 97, 108, 95, 110, 97, 109, 101, 0];
             let mut decoder = MessageDecoder::default();
@@ -399,6 +427,23 @@ mod tests {
                 Ok(Status::Done(FrontendMessage::DescribeStatement {
                     name: "statement_name".to_owned()
                 }))
+            );
+        }
+
+        #[test]
+        fn describe_unknown_type() {
+            let buffer = [82, 115, 116, 97, 116, 101, 109, 101, 110, 116, 95, 110, 97, 109, 101, 0];
+            let mut decoder = MessageDecoder::default();
+
+            decoder.next_stage(None).expect("proceed to the next stage");
+            decoder.next_stage(Some(&[DESCRIBE])).expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&LEN.to_be_bytes()))
+                .expect("proceed to the next stage");
+
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte('R')))
             );
         }
 
@@ -497,6 +542,25 @@ mod tests {
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
                 Ok(Status::Done(FrontendMessage::Terminate))
+            );
+        }
+
+        #[test]
+        fn unrecognized_message() {
+            let buffer = [];
+            let mut decoder = MessageDecoder::default();
+
+            decoder.next_stage(None).expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&[b'A']))
+                .expect("proceed to the next stage");
+            decoder
+                .next_stage(Some(&LEN.to_be_bytes()))
+                .expect("proceed to the next stage");
+
+            assert_eq!(
+                decoder.next_stage(Some(&buffer)),
+                Err(MessageFormatError::from(MessageFormatErrorKind::UnsupportedFrontendMessage('A')))
             );
         }
     }
