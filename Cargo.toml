@@ -1,6 +1,6 @@
 [package]
 name = "pg_wire"
-version = "0.5.0"
+version = "0.6.0"
 description = "Server Side implementation of PostgreSQL Wire Protocol"
 license = "Apache-2.0"
 repository = "https://github.com/alex-dukhno/pg_wire"
