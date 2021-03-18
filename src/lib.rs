@@ -27,11 +27,10 @@ mod errors;
 mod format;
 mod hand_shake;
 mod message_decoder;
-/// Module contains backend messages that could be send by server implementation
-/// to a client
 mod messages;
 mod request_codes;
 mod types;
+mod frontend;
 
 /// Connection key-value params
 pub type ClientParams = Vec<(String, String)>;
