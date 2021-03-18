@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{types::PgType, ConnId, ConnSecretKey, PgFormat};
+use crate::{types::PgType, ConnId, ConnSecretKey};
 
 const COMMAND_COMPLETE: u8 = b'C';
 const DATA_ROW: u8 = b'D';

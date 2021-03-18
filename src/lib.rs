@@ -17,20 +17,21 @@
 
 pub use errors::{HandShakeError, MessageFormatError, PayloadError, TypeValueDecodeError};
 pub use format::PgFormat;
+pub use frontend::{CommandMessage, HandShakeMessage};
 pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
-pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
+pub use messages::{BackendMessage, ColumnMetadata};
 pub use types::{PgType, Value};
 
 mod cursor;
 mod errors;
 mod format;
+mod frontend;
 mod hand_shake;
 mod message_decoder;
 mod messages;
 mod request_codes;
 mod types;
-mod frontend;
 
 /// Connection key-value params
 pub type ClientParams = Vec<(String, String)>;

@@ -15,6 +15,7 @@
 use crate::{PgFormat, PgType};
 
 /// Frontend message that could be received during connection hand shake process
+#[derive(Debug, PartialEq)]
 pub enum HandShakeMessage {
     /// Client requested GSSENC Request
     GssencRequest,
@@ -24,11 +25,12 @@ pub enum HandShakeMessage {
     Setup {
         /// client parameters
         params: Vec<(String, String)>,
-    }
+    },
 }
 
 /// Frontend message that could be received during client server communication
-pub enum PayloadMessage {
+#[derive(Debug, PartialEq)]
+pub enum CommandMessage {
     /// Execute the specified SQL.
     ///
     /// This is issued as part of the simple query flow.
