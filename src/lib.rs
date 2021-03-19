@@ -17,18 +17,18 @@
 
 pub use errors::{HandShakeError, MessageFormatError, PayloadError, TypeValueDecodeError};
 pub use format::PgFormat;
+pub use frontend::{CommandMessage, HandShakeMessage};
 pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, Status as HandShakeStatus};
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
-pub use messages::{BackendMessage, ColumnMetadata, FrontendMessage};
+pub use messages::{BackendMessage, ColumnMetadata};
 pub use types::{PgType, Value};
 
 mod cursor;
 mod errors;
 mod format;
+mod frontend;
 mod hand_shake;
 mod message_decoder;
-/// Module contains backend messages that could be send by server implementation
-/// to a client
 mod messages;
 mod request_codes;
 mod types;

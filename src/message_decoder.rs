@@ -15,7 +15,8 @@
 use crate::{
     cursor::Cursor,
     errors::{MessageFormatError, MessageFormatErrorKind},
-    messages::{FrontendMessage, BIND, CLOSE, DESCRIBE, EXECUTE, FLUSH, PARSE, QUERY, SYNC, TERMINATE},
+    frontend::CommandMessage,
+    messages::{BIND, CLOSE, DESCRIBE, EXECUTE, FLUSH, PARSE, QUERY, SYNC, TERMINATE},
     PgFormat, PgType,
 };
 use std::convert::TryFrom;
@@ -26,7 +27,7 @@ pub enum Status {
     /// `MessageDecoder` requests buffer with specified size
     Requesting(usize),
     /// `MessageDecoder` has decoded a message and returns it content
-    Done(FrontendMessage),
+    Done(CommandMessage),
 }
 
 #[derive(Debug, PartialEq)]
@@ -93,13 +94,13 @@ impl MessageDecoder {
         }
     }
 
-    fn decode(tag: u8, buffer: &[u8]) -> Result<FrontendMessage, MessageFormatError> {
+    fn decode(tag: u8, buffer: &[u8]) -> Result<CommandMessage, MessageFormatError> {
         let mut cursor = Cursor::from(buffer);
         match tag {
             // Simple query flow.
             QUERY => {
                 let sql = cursor.read_cstr()?.to_owned();
-                Ok(FrontendMessage::Query { sql })
+                Ok(CommandMessage::Query { sql })
             }
 
             // Extended query flow.
@@ -132,7 +133,7 @@ impl MessageDecoder {
                     result_formats.push(PgFormat::try_from(cursor.read_i16()?)?)
                 }
 
-                Ok(FrontendMessage::Bind {
+                Ok(CommandMessage::Bind {
                     portal_name,
                     statement_name,
                     param_formats,
@@ -144,8 +145,8 @@ impl MessageDecoder {
                 let first_char = cursor.read_byte()?;
                 let name = cursor.read_cstr()?.to_owned();
                 match first_char {
-                    b'P' => Ok(FrontendMessage::ClosePortal { name }),
-                    b'S' => Ok(FrontendMessage::CloseStatement { name }),
+                    b'P' => Ok(CommandMessage::ClosePortal { name }),
+                    b'S' => Ok(CommandMessage::CloseStatement { name }),
                     other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(
                         char::from(other),
                     ))),
@@ -155,8 +156,8 @@ impl MessageDecoder {
                 let first_char = cursor.read_byte()?;
                 let name = cursor.read_cstr()?.to_owned();
                 match first_char {
-                    b'P' => Ok(FrontendMessage::DescribePortal { name }),
-                    b'S' => Ok(FrontendMessage::DescribeStatement { name }),
+                    b'P' => Ok(CommandMessage::DescribePortal { name }),
+                    b'S' => Ok(CommandMessage::DescribeStatement { name }),
                     other => Err(MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte(
                         char::from(other),
                     ))),
@@ -165,9 +166,9 @@ impl MessageDecoder {
             EXECUTE => {
                 let portal_name = cursor.read_cstr()?.to_owned();
                 let max_rows = cursor.read_i32()?;
-                Ok(FrontendMessage::Execute { portal_name, max_rows })
+                Ok(CommandMessage::Execute { portal_name, max_rows })
             }
-            FLUSH => Ok(FrontendMessage::Flush),
+            FLUSH => Ok(CommandMessage::Flush),
             PARSE => {
                 let statement_name = cursor.read_cstr()?.to_owned();
                 let sql = cursor.read_cstr()?.to_owned();
@@ -178,15 +179,15 @@ impl MessageDecoder {
                     param_types.push(pg_type);
                 }
 
-                Ok(FrontendMessage::Parse {
+                Ok(CommandMessage::Parse {
                     statement_name,
                     sql,
                     param_types,
                 })
             }
-            SYNC => Ok(FrontendMessage::Sync),
+            SYNC => Ok(CommandMessage::Sync),
 
-            TERMINATE => Ok(FrontendMessage::Terminate),
+            TERMINATE => Ok(CommandMessage::Terminate),
 
             _ => Err(MessageFormatError::from(
                 MessageFormatErrorKind::UnsupportedFrontendMessage(char::from(tag)),
@@ -257,7 +258,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(QUERY_BYTES)),
-                Ok(Status::Done(FrontendMessage::Query {
+                Ok(Status::Done(CommandMessage::Query {
                     sql: "select * from t".to_owned()
                 }))
             );
@@ -301,7 +302,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::Query {
+                Ok(Status::Done(CommandMessage::Query {
                     sql: "create schema schema_name;".to_owned()
                 }))
             );
@@ -324,7 +325,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::Bind {
+                Ok(Status::Done(CommandMessage::Bind {
                     portal_name: "portal_name".to_owned(),
                     statement_name: "statement_name".to_owned(),
                     param_formats: vec![PgFormat::Binary, PgFormat::Binary, PgFormat::Binary],
@@ -347,7 +348,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::ClosePortal {
+                Ok(Status::Done(CommandMessage::ClosePortal {
                     name: "portal_name".to_owned(),
                 }))
             );
@@ -366,7 +367,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::CloseStatement {
+                Ok(Status::Done(CommandMessage::CloseStatement {
                     name: "statement_name".to_owned(),
                 }))
             );
@@ -404,7 +405,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::DescribePortal {
+                Ok(Status::Done(CommandMessage::DescribePortal {
                     name: "portal_name".to_owned()
                 }))
             );
@@ -425,7 +426,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::DescribeStatement {
+                Ok(Status::Done(CommandMessage::DescribeStatement {
                     name: "statement_name".to_owned()
                 }))
             );
@@ -463,7 +464,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::Execute {
+                Ok(Status::Done(CommandMessage::Execute {
                     portal_name: "portal_name".to_owned(),
                     max_rows: 0,
                 }))
@@ -483,7 +484,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::Flush))
+                Ok(Status::Done(CommandMessage::Flush))
             );
         }
 
@@ -504,7 +505,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::Parse {
+                Ok(Status::Done(CommandMessage::Parse {
                     statement_name: "".to_owned(),
                     sql: "select * from schema_name.table_name where si_column = $1;".to_owned(),
                     param_types: vec![Some(PgType::Integer)],
@@ -525,7 +526,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::Sync))
+                Ok(Status::Done(CommandMessage::Sync))
             );
         }
 
@@ -544,7 +545,7 @@ mod tests {
 
             assert_eq!(
                 decoder.next_stage(Some(&buffer)),
-                Ok(Status::Done(FrontendMessage::Terminate))
+                Ok(Status::Done(CommandMessage::Terminate))
             );
         }
 
