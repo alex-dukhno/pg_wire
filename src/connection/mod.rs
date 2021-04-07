@@ -62,6 +62,10 @@ impl Connection {
         }
     }
 
+    pub fn address(&self) -> &SocketAddr {
+        &self.address
+    }
+
     pub fn sender(&self) -> Arc<ResponseSender> {
         self.sender.clone()
     }
@@ -133,11 +137,11 @@ impl Sender for ResponseSender {
         Ok(())
     }
 
-    fn send<Q: Into<BackendMessage>, E: Into<BackendMessage>>(&self, query_result: Result<Q, E>) -> io::Result<()> {
+    fn send(&self, query_result: Result<BackendMessage, BackendMessage>) -> io::Result<()> {
         block_on(async {
             let message: BackendMessage = match query_result {
-                Ok(event) => event.into(),
-                Err(error) => error.into(),
+                Ok(event) => event,
+                Err(error) => error,
             };
             self.channel
                 .lock()
@@ -158,7 +162,7 @@ pub trait Sender: Send + Sync {
 
     /// Sends response messages to client. Most of the time it is a single
     /// message, select result one of the exceptional situation
-    fn send<Q: Into<BackendMessage>, E: Into<BackendMessage>>(&self, query_result: Result<Q, E>) -> io::Result<()>;
+    fn send(&self, query_result: Result<BackendMessage, BackendMessage>) -> io::Result<()>;
 }
 
 pub enum Channel {

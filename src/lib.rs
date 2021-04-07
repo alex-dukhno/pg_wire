@@ -25,6 +25,7 @@ pub use hand_shake::{Process as HandShakeProcess, Request as HandShakeRequest, S
 pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata};
 pub use types::{PgType, Value};
+pub use connection::{ConnSupervisor, ProtocolConfiguration, manager::ConnectionManager, network::Network, ClientRequest, ResponseSender, Sender};
 
 mod cursor;
 mod errors;
