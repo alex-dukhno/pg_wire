@@ -15,6 +15,9 @@
 #![warn(missing_docs)]
 //! API for backend implementation of PostgreSQL Wire Protocol
 
+#[cfg(all(feature = "async_net", feature = "mock_network"))]
+compile_error!("feature \"async_net\" and feature \"mock_network\" cannot be enabled at the same time");
+
 pub use errors::{HandShakeError, MessageFormatError, PayloadError, TypeValueDecodeError};
 pub use format::PgFormat;
 pub use frontend::{CommandMessage, HandShakeMessage};
@@ -32,6 +35,7 @@ mod message_decoder;
 mod messages;
 mod request_codes;
 mod types;
+mod connection;
 
 /// Connection key-value params
 pub type ClientParams = Vec<(String, String)>;
