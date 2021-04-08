@@ -15,6 +15,13 @@
 #![warn(missing_docs)]
 //! API for backend implementation of PostgreSQL Wire Protocol
 
+#[cfg(all(feature = "async_net", feature = "tokio_net"))]
+compile_error!("feature \"async_net\" and feature \"tokio_net\" cannot be enabled at the same time");
+
+pub use connection::{
+    listener::PgWireListener, network::Network, ClientRequest, ConnSupervisor, ProtocolConfiguration, ResponseSender,
+    Sender,
+};
 pub use errors::{HandShakeError, MessageFormatError, PayloadError, TypeValueDecodeError};
 pub use format::PgFormat;
 pub use frontend::{CommandMessage, HandShakeMessage};
@@ -23,6 +30,7 @@ pub use message_decoder::{MessageDecoder, Status as MessageDecoderStatus};
 pub use messages::{BackendMessage, ColumnMetadata};
 pub use types::{PgType, Value};
 
+mod connection;
 mod cursor;
 mod errors;
 mod format;
