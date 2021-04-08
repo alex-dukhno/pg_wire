@@ -61,7 +61,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: tarpaulin
-          args: --all --ignore-tests -o Lcov --output-dir ./coverage
+          args: --all --ignore-tests -o Lcov --output-dir ./coverage --features mock_net
       - uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
