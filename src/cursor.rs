@@ -73,7 +73,7 @@ impl<'c> Cursor<'c> {
             Ok(val)
         } else {
             Err(PayloadError::from(PayloadErrorKind::CStringNotTerminated {
-                source: &self.buf[..],
+                source: &self.buf,
             }))
         }
     }

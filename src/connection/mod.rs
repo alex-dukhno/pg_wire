@@ -12,24 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{
+    connection::network::*, BackendMessage, CommandMessage, ConnId, ConnSecretKey, MessageDecoder, MessageDecoderStatus,
+};
 use async_mutex::Mutex as AsyncMutex;
-use futures_lite::{future::block_on};
+use futures_lite::future::block_on;
 use rand::Rng;
 use std::{
     collections::{HashMap, VecDeque},
     io,
     net::SocketAddr,
     path::PathBuf,
-    pin::Pin,
     sync::{Arc, Mutex},
-    task::{Context, Poll},
 };
-use crate::{BackendMessage, ConnId, CommandMessage, MessageDecoderStatus, MessageDecoder, ConnSecretKey};
-use crate::connection::network::*;
 
+#[cfg(feature = "async_net")]
 mod async_native_tls;
-pub mod manager;
+pub mod listener;
 pub mod network;
+
+/// An error returned from creating an acceptor.
+#[derive(Debug)]
+pub enum AcceptError {
+    /// NativeTls error.
+    NativeTls(native_tls::Error),
+    /// Io error.
+    Io(std::io::Error),
+}
+
+impl From<native_tls::Error> for AcceptError {
+    fn from(error: native_tls::Error) -> AcceptError {
+        AcceptError::NativeTls(error)
+    }
+}
+
+impl From<std::io::Error> for AcceptError {
+    fn from(error: std::io::Error) -> AcceptError {
+        AcceptError::Io(error)
+    }
+}
 
 type Props = Vec<(String, String)>;
 
@@ -119,6 +140,7 @@ pub enum ClientRequest {
     QueryCancellation(ConnId),
 }
 
+/// Responsible for sending messages back to client
 pub struct ResponseSender {
     channel: Arc<AsyncMutex<Channel>>,
 }
@@ -180,7 +202,9 @@ impl ConnSupervisor {
         }
     }
 
+    // TODO: better error type
     /// Allocates a new Connection ID and secret key.
+    #[allow(clippy::result_unit_err)]
     pub fn alloc(&self) -> Result<(ConnId, ConnSecretKey), ()> {
         self.inner.lock().unwrap().alloc()
     }
@@ -261,11 +285,11 @@ pub enum Encryption {
     RejectSsl,
 }
 
-impl Into<&'_ [u8]> for Encryption {
-    fn into(self) -> &'static [u8] {
-        match self {
-            Self::AcceptSsl => &[b'S'],
-            Self::RejectSsl => &[b'N'],
+impl From<Encryption> for &'static [u8] {
+    fn from(encryption: Encryption) -> &'static [u8] {
+        match encryption {
+            Encryption::AcceptSsl => &[b'S'],
+            Encryption::RejectSsl => &[b'N'],
         }
     }
 }

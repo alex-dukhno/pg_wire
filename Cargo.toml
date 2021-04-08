@@ -15,8 +15,8 @@ include = [
 [features]
 default = []
 async_net = ["async-io", "blocking"]
-mock_network = []
 tokio_net = ["tokio", "tokio-native-tls"]
+mock_net = []
 
 [dependencies]
 async-mutex = "1.4.0"

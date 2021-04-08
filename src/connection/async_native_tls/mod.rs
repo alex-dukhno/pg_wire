@@ -7,7 +7,7 @@ mod std_adapter;
 mod tls_stream;
 
 pub use accept::accept;
-pub use acceptor::{Error as AcceptError, TlsAcceptor};
+pub use acceptor::TlsAcceptor;
 pub use tls_stream::TlsStream;
 
 pub use native_tls::{Certificate, Error, Identity, Protocol, Result};
@@ -15,8 +15,9 @@ pub use native_tls::{Certificate, Error, Identity, Protocol, Result};
 mod accept {
     use super::TlsStream;
     use futures_lite::{AsyncRead, AsyncWrite};
+    use crate::connection::AcceptError;
 
-    pub async fn accept<R, S, T>(file: R, password: S, stream: T) -> Result<TlsStream<T>, super::AcceptError>
+    pub async fn accept<R, S, T>(file: R, password: S, stream: T) -> Result<TlsStream<T>, AcceptError>
     where
         R: AsyncRead + Unpin,
         S: AsRef<str>,

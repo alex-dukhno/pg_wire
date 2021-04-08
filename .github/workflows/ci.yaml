@@ -21,7 +21,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --all --features mock_network
+          args: --all --features mock_net
       - uses: actions-rs/cargo@v1
         with:
           command: tarpaulin

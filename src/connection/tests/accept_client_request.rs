@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use super::pg_frontend;
-use crate::{connection::{
-    ClientRequest,
-    manager::ConnectionManager,
-    network::{Network, mock::TestCase},
-    ConnSupervisor, Encryption, ProtocolConfiguration,
-}, BackendMessage};
+use crate::{
+    connection::{
+        listener::PgWireListener,
+        network::{mock::TestCase, Network},
+        ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
+    },
+    BackendMessage,
+};
 use futures_lite::future::block_on;
 use std::path::PathBuf;
 
@@ -27,7 +29,7 @@ fn trying_read_from_empty_stream() {
     block_on(async {
         let test_case = TestCase::new(vec![]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::none(),
             ConnSupervisor::new(1, 2),
@@ -43,7 +45,7 @@ fn trying_read_only_length_of_ssl_message() {
     block_on(async {
         let test_case = TestCase::new(vec![&[0, 0, 0, 8], &[]]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::none(),
             ConnSupervisor::new(1, 2),
@@ -59,7 +61,7 @@ fn sending_reject_notification_for_none_secure() {
     block_on(async {
         let test_case = TestCase::new(vec![pg_frontend::Message::SslRequired.as_vec().as_slice(), &[]]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::none(),
             ConnSupervisor::new(1, 2),
@@ -80,7 +82,7 @@ fn sending_accept_notification_for_ssl_only_secure() {
     block_on(async {
         let test_case = TestCase::new(vec![pg_frontend::Message::SslRequired.as_vec().as_slice(), &[]]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::with_ssl(PathBuf::new(), "password".to_owned()),
             ConnSupervisor::new(1, 2),
@@ -114,7 +116,7 @@ fn successful_connection_handshake_for_none_secure() {
             &[],
         ]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::none(),
             ConnSupervisor::new(1, 2),
@@ -180,7 +182,7 @@ fn successful_connection_handshake_for_ssl_only_secure() {
             pg_frontend::Message::Password("123").as_vec().as_slice(),
         ]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::with_ssl(PathBuf::new(), "password".to_owned()),
             ConnSupervisor::new(1, 2),
@@ -240,7 +242,7 @@ fn successful_cancel_request_connection() {
             .as_vec()
             .as_slice()]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::none(),
             conn_supervisor,
@@ -262,7 +264,7 @@ fn verification_failed_cancel_request_connection() {
             .as_vec()
             .as_slice()]);
 
-        let connection_manager = ConnectionManager::new(
+        let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
             ProtocolConfiguration::none(),
             conn_supervisor,

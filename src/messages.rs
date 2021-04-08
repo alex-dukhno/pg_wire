@@ -63,7 +63,7 @@ pub enum BackendMessage {
     /// can be computed in SQL as concat('md5', md5(concat(md5(concat(password,
     /// username)), random-salt))). (Keep in mind the md5() function returns its
     /// result as a hex string.)
-    AuthenticationMD5Password,
+    AuthenticationMd5Password,
     /// The authentication exchange is successfully completed.
     AuthenticationOk,
     /// Identifies as cancellation key data. The frontend must save these values
@@ -112,7 +112,7 @@ impl BackendMessage {
         match self {
             BackendMessage::NoticeResponse => vec![NOTICE_RESPONSE],
             BackendMessage::AuthenticationCleartextPassword => vec![AUTHENTICATION, 0, 0, 0, 8, 0, 0, 0, 3],
-            BackendMessage::AuthenticationMD5Password => vec![AUTHENTICATION, 0, 0, 0, 12, 0, 0, 0, 5, 1, 1, 1, 1],
+            BackendMessage::AuthenticationMd5Password => vec![AUTHENTICATION, 0, 0, 0, 12, 0, 0, 0, 5, 1, 1, 1, 1],
             BackendMessage::AuthenticationOk => vec![AUTHENTICATION, 0, 0, 0, 8, 0, 0, 0, 0],
             BackendMessage::BackendKeyData(conn_id, secret_key) => {
                 let mut buff = vec![BACKEND_KEY_DATA, 0, 0, 0, 12];
@@ -261,7 +261,7 @@ mod serializing_backend_messages {
     #[test]
     fn authentication_md5_password() {
         assert_eq!(
-            BackendMessage::AuthenticationMD5Password.as_vec(),
+            BackendMessage::AuthenticationMd5Password.as_vec(),
             vec![AUTHENTICATION, 0, 0, 0, 12, 0, 0, 0, 5, 1, 1, 1, 1]
         )
     }

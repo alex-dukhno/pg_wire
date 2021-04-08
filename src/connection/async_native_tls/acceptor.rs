@@ -4,34 +4,14 @@ use std::marker::Unpin;
 use super::handshake::handshake;
 use super::TlsStream;
 use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite};
+use crate::connection::AcceptError;
 
 #[derive(Clone)]
 pub struct TlsAcceptor(native_tls::TlsAcceptor);
 
-/// An error returned from creating an acceptor.
-#[derive(Debug)]
-pub enum Error {
-    /// NativeTls error.
-    NativeTls(native_tls::Error),
-    /// Io error.
-    Io(std::io::Error),
-}
-
-impl From<native_tls::Error> for Error {
-    fn from(error: native_tls::Error) -> Error {
-        Error::NativeTls(error)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Error {
-        Error::Io(error)
-    }
-}
-
 impl TlsAcceptor {
     /// Create a new TlsAcceptor based on an identity file and matching password.
-    pub async fn new<R, S>(mut file: R, password: S) -> Result<Self, Error>
+    pub async fn new<R, S>(mut file: R, password: S) -> Result<Self, AcceptError>
     where
         R: AsyncRead + Unpin,
         S: AsRef<str>,

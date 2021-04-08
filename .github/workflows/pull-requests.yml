@@ -29,6 +29,12 @@ jobs:
     needs:
       - rustfmt
     name: clippy
+    strategy:
+      matrix:
+        feature:
+          - async_net
+          - tokio_net
+          - mock_net
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -38,7 +44,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --all-features
+          args: --all-targets --features ${{ matrix.feature }}
 
   tests:
     needs:

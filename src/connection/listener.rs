@@ -12,36 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_mutex::Mutex as AsyncMutex;
-use crate::connection::{
-    network::*, ClientRequest, ConnSupervisor, Connection, Encryption, ProtocolConfiguration,
+use crate::{
+    connection::{
+        network::*, AcceptError, ClientRequest, ConnSupervisor, Connection, Encryption, ProtocolConfiguration,
+    },
+    BackendMessage, HandShakeProcess, HandShakeStatus,
 };
-#[cfg(any(feature = "mock_network", feature = "async_net"))]
-use futures_lite::{AsyncReadExt, AsyncWriteExt};
-#[cfg(feature = "tokio_net")]
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use async_mutex::Mutex as AsyncMutex;
 use std::{io, sync::Arc};
-use crate::{HandShakeProcess, HandShakeStatus, BackendMessage};
 
-pub struct ConnectionManager {
+/// A PostgreSql connection server, listening for connections.
+pub struct PgWireListener {
     network: Network,
     protocol_config: ProtocolConfiguration,
     conn_supervisor: ConnSupervisor,
 }
 
-impl ConnectionManager {
+impl PgWireListener {
+    /// creates new PostgreSql connection server
     pub fn new(
         network: Network,
         protocol_config: ProtocolConfiguration,
         conn_supervisor: ConnSupervisor,
-    ) -> ConnectionManager {
-        ConnectionManager {
+    ) -> PgWireListener {
+        PgWireListener {
             network,
             protocol_config,
             conn_supervisor,
         }
     }
 
+    /// Accept a new incoming connection from this listener.
     pub async fn accept(&self) -> io::Result<Result<ClientRequest, ()>> {
         match self.network.accept().await {
             Ok((stream, address)) => {
@@ -63,9 +64,10 @@ impl ConnectionManager {
                                         Some((path, password)) => {
                                             match self.network.tls_accept(path, password, channel).await {
                                                 Ok(socket) => Channel::Secure(socket),
-                                                Err(err) => {
-                                                    return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
-                                                }
+                                                Err(err) => match err {
+                                                    AcceptError::NativeTls(_tls) => return Ok(Err(())),
+                                                    AcceptError::Io(io_error) => return Err(io_error),
+                                                },
                                             }
                                         }
                                         None => return Err(io::Error::from(io::ErrorKind::ConnectionAborted)),
@@ -93,7 +95,7 @@ impl ConnectionManager {
                                 .await?;
                             channel.flush().await?;
                             let mut tag_buffer = [0u8; 1];
-                            let tag = channel.read_exact(&mut tag_buffer).await.map(|_| tag_buffer[0]);
+                            let _tag = channel.read_exact(&mut tag_buffer).await.map(|_| tag_buffer[0]);
                             let mut len_buffer = [0u8; 4];
                             let len = channel
                                 .read_exact(&mut len_buffer)

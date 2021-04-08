@@ -12,36 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{Arc, Mutex};
-pub use futures_lite::{AsyncRead, AsyncWrite, AsyncWriteExt, AsyncReadExt};
-use std::task::{Context, Poll};
-use std::pin::Pin;
-use std::io;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use crate::connection::async_native_tls::AcceptError;
+use crate::connection::AcceptError;
+pub use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use std::{
+    io,
+    net::SocketAddr,
+    path::Path,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    task::{Context, Poll},
+};
 
 impl From<TestCase> for Network {
     fn from(test_case: TestCase) -> Network {
-        Network {
-            data: test_case,
-        }
+        Network { data: test_case }
     }
 }
 
 impl From<TestCase> for Stream {
     fn from(test_case: TestCase) -> Stream {
-        Stream {
-            inner: test_case,
-        }
+        Stream { inner: test_case }
     }
 }
 
 impl From<TestCase> for SecureStream {
     fn from(test_case: TestCase) -> SecureStream {
-        SecureStream {
-            inner: test_case
-        }
+        SecureStream { inner: test_case }
     }
 }
 
@@ -106,11 +102,13 @@ impl AsyncWrite for TestCase {
     }
 }
 
+#[doc(hidden)]
 pub struct Network {
     data: TestCase,
 }
 
 impl Network {
+    #[doc(hidden)]
     pub async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
         use std::net::{IpAddr, Ipv4Addr};
         Ok((
@@ -119,9 +117,10 @@ impl Network {
         ))
     }
 
+    #[doc(hidden)]
     pub async fn tls_accept(
         &self,
-        _certificate_path: &PathBuf,
+        _certificate_path: &Path,
         _password: &str,
         _stream: Stream,
     ) -> Result<SecureStream, AcceptError> {

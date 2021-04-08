@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::connection::network::mock::TestCase;
-use crate::connection::{
-    network::{Stream},
-    Channel, ConnSupervisor, Connection,
+use crate::{
+    connection::{
+        network::{mock::TestCase, Stream},
+        Channel, ConnSupervisor, Connection,
+    },
+    CommandMessage,
 };
 use async_mutex::Mutex as AsyncMutex;
 use futures_lite::future::block_on;
@@ -23,7 +25,6 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
 };
-use crate::CommandMessage;
 
 #[test]
 fn read_termination_command() {

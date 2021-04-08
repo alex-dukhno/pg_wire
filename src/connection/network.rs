@@ -17,14 +17,14 @@ cfg_if::cfg_if! {
         pub use async_net::*;
     } else if #[cfg(feature = "tokio_net")] {
         pub use tokio_net::*;
-    } else {
+    } else if #[cfg(feature = "mock_net")] {
         pub use mock::*;
     }
 }
 
-#[cfg(feature = "mock_network")]
-pub (crate) mod mock;
 #[cfg(feature = "async_net")]
 mod async_net;
+#[cfg(feature = "mock_net")]
+pub(crate) mod mock;
 #[cfg(feature = "tokio_net")]
 mod tokio_net;

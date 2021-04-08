@@ -12,64 +12,66 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use tokio::io::{AsyncRead, AsyncWriteExt, AsyncWrite, AsyncReadExt};
+use crate::connection::AcceptError;
 use std::{
     io,
-    net::{SocketAddr},
-    path::PathBuf,
+    net::SocketAddr,
+    path::Path,
     pin::Pin,
     task::{Context, Poll},
 };
-use tokio::net::{TcpListener, TcpStream};
+pub use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::{
+    fs::File,
+    io::ReadBuf,
+    net::{TcpListener, TcpStream},
+};
 use tokio_native_tls::TlsStream;
-use crate::connection::async_native_tls::AcceptError;
-use tokio::io::ReadBuf;
-use tokio::fs::File;
 
 impl From<TcpListener> for Network {
     fn from(tcp: TcpListener) -> Network {
-        Network {
-            inner: tcp,
-        }
+        Network { inner: tcp }
     }
 }
 
 impl From<TcpStream> for Stream {
     fn from(tcp: TcpStream) -> Stream {
-        Stream {
-            inner: tcp,
-        }
+        Stream { inner: tcp }
     }
 }
 
 impl From<TlsStream<Stream>> for SecureStream {
     fn from(stream: TlsStream<Stream>) -> SecureStream {
-        SecureStream {
-            inner: stream,
-        }
+        SecureStream { inner: stream }
     }
 }
 
+/// Abstracts underling mechanics of establishing connection between client and server
 pub struct Network {
     inner: TcpListener,
 }
 
 impl Network {
+    /// Accept a new incoming stream from this network.
     pub async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
-        self.inner.accept().await.map(|(stream, addr)| (Stream::from(stream), addr))
+        self.inner
+            .accept()
+            .await
+            .map(|(stream, addr)| (Stream::from(stream), addr))
     }
 
+    /// Accept a new incoming tls stream from this network.
     pub async fn tls_accept(
         &self,
-        certificate_path: &PathBuf,
+        certificate_path: &Path,
         password: &str,
         stream: Stream,
     ) -> Result<SecureStream, AcceptError> {
         let mut identity = vec![];
-        let mut file = File::open(certificate_path).await.map_err(|e| AcceptError::Io(e))?;
+        let mut file = File::open(certificate_path).await.map_err(AcceptError::Io)?;
         file.read_to_end(&mut identity).await?;
 
-        let identity = native_tls::Identity::from_pkcs12(&identity, password.as_ref())?;
+        let identity = native_tls::Identity::from_pkcs12(&identity, password)?;
         let acceptor = tokio_native_tls::TlsAcceptor::from(native_tls::TlsAcceptor::new(identity)?);
         let tls_stream = acceptor.accept(stream).await?;
         Ok(SecureStream::from(tls_stream))

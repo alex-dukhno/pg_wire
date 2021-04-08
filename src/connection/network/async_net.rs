@@ -12,53 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(not(feature = "tokio_net"))]
+use crate::connection::async_native_tls::{self, TlsStream};
+use crate::connection::AcceptError;
 use async_io::Async;
-use std::io;
-use crate::connection::async_native_tls::{self, TlsStream, AcceptError};
-use std::net::{TcpListener, TcpStream, SocketAddr};
-use std::path::PathBuf;
 use blocking::Unblock;
-use std::fs::File;
-pub use futures_lite::{AsyncRead, AsyncWrite, AsyncWriteExt, AsyncReadExt};
-use std::task::{Context, Poll};
-use std::pin::Pin;
+pub use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use std::{
+    fs::File,
+    io,
+    net::{SocketAddr, TcpListener, TcpStream},
+    path::Path,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 impl From<Async<TcpListener>> for Network {
     fn from(tcp: Async<TcpListener>) -> Network {
-        Network {
-            inner: tcp,
-        }
+        Network { inner: tcp }
     }
 }
 
 impl From<Async<TcpStream>> for Stream {
     fn from(tcp: Async<TcpStream>) -> Stream {
-        Stream {
-            inner: tcp,
-        }
+        Stream { inner: tcp }
     }
 }
 
 impl From<TlsStream<Stream>> for SecureStream {
     fn from(stream: TlsStream<Stream>) -> SecureStream {
-        SecureStream {
-            inner: stream,
-        }
+        SecureStream { inner: stream }
     }
 }
 
+/// Abstracts underling mechanics of establishing connection between client and server
 pub struct Network {
     inner: Async<TcpListener>,
 }
 
 impl Network {
+    /// Accept a new incoming stream from this network.
     pub async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
-        self.inner.accept().await.map(|(stream, addr)| (Stream::from(stream), addr))
+        self.inner
+            .accept()
+            .await
+            .map(|(stream, addr)| (Stream::from(stream), addr))
     }
 
+    /// Accept a new incoming tls stream from this network.
     pub async fn tls_accept(
         &self,
-        certificate_path: &PathBuf,
+        certificate_path: &Path,
         password: &str,
         stream: Stream,
     ) -> Result<SecureStream, AcceptError> {
