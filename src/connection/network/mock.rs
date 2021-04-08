@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::connection::network::{Stream, StreamInner, Network, NetworkInner, SecureStream, SecureStreamInner};
 use std::sync::{Arc, Mutex};
-use futures_lite::io::{AsyncRead, AsyncWrite};
+pub use futures_lite::{AsyncRead, AsyncWrite, AsyncWriteExt, AsyncReadExt};
 use std::task::{Context, Poll};
 use std::pin::Pin;
 use std::io;
-
-pub type TcpListener = TestCase;
-pub type TcpStream = TestCase;
-pub type TlsStream = TestCase;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use crate::connection::async_native_tls::AcceptError;
 
 impl From<TestCase> for Network {
-    fn from(test_case: TestCase) -> Self {
+    fn from(test_case: TestCase) -> Network {
         Network {
-            inner: NetworkInner::Mock(test_case),
+            data: test_case,
         }
     }
 }
@@ -34,7 +32,7 @@ impl From<TestCase> for Network {
 impl From<TestCase> for Stream {
     fn from(test_case: TestCase) -> Stream {
         Stream {
-            inner: StreamInner::Mock(test_case),
+            inner: test_case,
         }
     }
 }
@@ -42,7 +40,7 @@ impl From<TestCase> for Stream {
 impl From<TestCase> for SecureStream {
     fn from(test_case: TestCase) -> SecureStream {
         SecureStream {
-            inner: SecureStreamInner::Mock(test_case),
+            inner: test_case
         }
     }
 }
@@ -78,7 +76,7 @@ impl TestCase {
 }
 
 impl AsyncRead for TestCase {
-    fn poll_read(self: Pin<&mut Self>, _cx: &mut Context, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    fn poll_read(self: Pin<&mut TestCase>, _cx: &mut Context, buf: &mut [u8]) -> Poll<io::Result<usize>> {
         let mut case = self.get_mut().inner.lock().unwrap();
         if buf.len() > case.read_content.len() - case.read_index {
             Poll::Ready(Err(io::Error::from(io::ErrorKind::UnexpectedEof)))
@@ -93,17 +91,125 @@ impl AsyncRead for TestCase {
 }
 
 impl AsyncWrite for TestCase {
-    fn poll_write(self: Pin<&mut Self>, _cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
+    fn poll_write(self: Pin<&mut TestCase>, _cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
         let mut case = self.get_mut().inner.lock().unwrap();
         case.write_content.extend_from_slice(buf);
         Poll::Ready(Ok(buf.len()))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<io::Result<()>> {
+    fn poll_flush(self: Pin<&mut TestCase>, _cx: &mut Context) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 
-    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<io::Result<()>> {
+    fn poll_close(self: Pin<&mut TestCase>, _cx: &mut Context) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
+    }
+}
+
+pub struct Network {
+    data: TestCase,
+}
+
+impl Network {
+    pub async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
+        use std::net::{IpAddr, Ipv4Addr};
+        Ok((
+            Stream::from(self.data.clone()),
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1000),
+        ))
+    }
+
+    pub async fn tls_accept(
+        &self,
+        _certificate_path: &PathBuf,
+        _password: &str,
+        _stream: Stream,
+    ) -> Result<SecureStream, AcceptError> {
+        Ok(SecureStream::from(self.data.clone()))
+    }
+}
+
+pub struct SecureStream {
+    inner: TestCase,
+}
+
+impl AsyncRead for SecureStream {
+    fn poll_read(self: Pin<&mut SecureStream>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for SecureStream {
+    fn poll_write(self: Pin<&mut SecureStream>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut SecureStream>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut SecureStream>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_close(cx)
+    }
+}
+
+pub struct Stream {
+    inner: TestCase,
+}
+
+impl AsyncRead for Stream {
+    fn poll_read(self: Pin<&mut Stream>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for Stream {
+    fn poll_write(self: Pin<&mut Stream>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Stream>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_flush(cx)
+    }
+
+    fn poll_close(self: Pin<&mut Stream>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_close(cx)
+    }
+}
+
+pub enum Channel {
+    Plain(Stream),
+    Secure(SecureStream),
+}
+
+impl AsyncRead for Channel {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+        match self.get_mut() {
+            Channel::Plain(tcp) => Pin::new(tcp).poll_read(cx, buf),
+            Channel::Secure(tls) => Pin::new(tls).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for Channel {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+        match self.get_mut() {
+            Channel::Plain(tcp) => Pin::new(tcp).poll_write(cx, buf),
+            Channel::Secure(tls) => Pin::new(tls).poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.get_mut() {
+            Channel::Plain(tcp) => Pin::new(tcp).poll_flush(cx),
+            Channel::Secure(tls) => Pin::new(tls).poll_flush(cx),
+        }
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match self.get_mut() {
+            Channel::Plain(tcp) => Pin::new(tcp).poll_close(cx),
+            Channel::Secure(tls) => Pin::new(tls).poll_close(cx),
+        }
     }
 }

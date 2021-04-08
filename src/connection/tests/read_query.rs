@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::connection::network::mock::TestCase;
 use crate::connection::{
-    network::{Stream, mock::TestCase},
+    network::{Stream},
     Channel, ConnSupervisor, Connection,
 };
 use async_mutex::Mutex as AsyncMutex;

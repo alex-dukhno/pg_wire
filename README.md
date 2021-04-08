@@ -18,3 +18,16 @@ psql -h 127.0.0.1 -U postgres -p 5432 -W
 ```
 Enter any password
 The server always handles `select 1` SQL query
+
+### Using tokio runtime
+
+Open your terminal and run the following command:
+```shell
+cargo run --example smol_server --features tokio_net
+```
+Open another terminal window and run:
+```shell
+psql -h 127.0.0.1 -U postgres -p 5432 -W
+```
+Enter any password
+The server always handles `select 1` SQL query

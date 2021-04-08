@@ -15,8 +15,8 @@
 #![warn(missing_docs)]
 //! API for backend implementation of PostgreSQL Wire Protocol
 
-#[cfg(all(feature = "async_net", feature = "mock_network"))]
-compile_error!("feature \"async_net\" and feature \"mock_network\" cannot be enabled at the same time");
+// #[cfg(all(feature = "async_net", feature = "tokio"))]
+// compile_error!("feature \"async_net\" and feature \"tokio\" cannot be enabled at the same time");
 
 pub use errors::{HandShakeError, MessageFormatError, PayloadError, TypeValueDecodeError};
 pub use format::PgFormat;

@@ -12,27 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_io::Async;
-use std::io;
-use crate::connection::async_native_tls::{self, TlsStream, AcceptError};
-use std::net::{TcpListener, TcpStream, SocketAddr};
-use std::path::PathBuf;
-use blocking::Unblock;
-use std::fs::File;
-pub use futures_lite::{AsyncRead, AsyncWrite, AsyncWriteExt, AsyncReadExt};
-use std::task::{Context, Poll};
-use std::pin::Pin;
+pub use tokio::io::{AsyncRead, AsyncWriteExt, AsyncWrite, AsyncReadExt};
+use std::{
+    io,
+    net::{SocketAddr},
+    path::PathBuf,
+    pin::Pin,
+    task::{Context, Poll},
+};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_native_tls::TlsStream;
+use crate::connection::async_native_tls::AcceptError;
+use tokio::io::ReadBuf;
+use tokio::fs::File;
 
-impl From<Async<TcpListener>> for Network {
-    fn from(tcp: Async<TcpListener>) -> Network {
+impl From<TcpListener> for Network {
+    fn from(tcp: TcpListener) -> Network {
         Network {
             inner: tcp,
         }
     }
 }
 
-impl From<Async<TcpStream>> for Stream {
-    fn from(tcp: Async<TcpStream>) -> Stream {
+impl From<TcpStream> for Stream {
+    fn from(tcp: TcpStream) -> Stream {
         Stream {
             inner: tcp,
         }
@@ -48,7 +51,7 @@ impl From<TlsStream<Stream>> for SecureStream {
 }
 
 pub struct Network {
-    inner: Async<TcpListener>,
+    inner: TcpListener,
 }
 
 impl Network {
@@ -62,9 +65,14 @@ impl Network {
         password: &str,
         stream: Stream,
     ) -> Result<SecureStream, AcceptError> {
-        Ok(SecureStream::from(
-            async_native_tls::accept(Unblock::new(File::open(certificate_path)?), password, stream).await?,
-        ))
+        let mut identity = vec![];
+        let mut file = File::open(certificate_path).await.map_err(|e| AcceptError::Io(e))?;
+        file.read_to_end(&mut identity).await?;
+
+        let identity = native_tls::Identity::from_pkcs12(&identity, password.as_ref())?;
+        let acceptor = tokio_native_tls::TlsAcceptor::from(native_tls::TlsAcceptor::new(identity)?);
+        let tls_stream = acceptor.accept(stream).await?;
+        Ok(SecureStream::from(tls_stream))
     }
 }
 
@@ -73,7 +81,7 @@ pub struct SecureStream {
 }
 
 impl AsyncRead for SecureStream {
-    fn poll_read(self: Pin<&mut SecureStream>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    fn poll_read(self: Pin<&mut SecureStream>, cx: &mut Context<'_>, buf: &mut ReadBuf) -> Poll<io::Result<()>> {
         Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
     }
 }
@@ -87,17 +95,17 @@ impl AsyncWrite for SecureStream {
         Pin::new(&mut self.get_mut().inner).poll_flush(cx)
     }
 
-    fn poll_close(self: Pin<&mut SecureStream>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_close(cx)
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
     }
 }
 
 pub struct Stream {
-    inner: Async<TcpStream>,
+    inner: TcpStream,
 }
 
 impl AsyncRead for Stream {
-    fn poll_read(self: Pin<&mut Stream>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    fn poll_read(self: Pin<&mut Stream>, cx: &mut Context<'_>, buf: &mut ReadBuf) -> Poll<io::Result<()>> {
         Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
     }
 }
@@ -111,8 +119,8 @@ impl AsyncWrite for Stream {
         Pin::new(&mut self.get_mut().inner).poll_flush(cx)
     }
 
-    fn poll_close(self: Pin<&mut Stream>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().inner).poll_close(cx)
+    fn poll_shutdown(self: Pin<&mut Stream>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
     }
 }
 
@@ -122,7 +130,7 @@ pub enum Channel {
 }
 
 impl AsyncRead for Channel {
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf) -> Poll<io::Result<()>> {
         match self.get_mut() {
             Channel::Plain(tcp) => Pin::new(tcp).poll_read(cx, buf),
             Channel::Secure(tls) => Pin::new(tls).poll_read(cx, buf),
@@ -145,10 +153,10 @@ impl AsyncWrite for Channel {
         }
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.get_mut() {
-            Channel::Plain(tcp) => Pin::new(tcp).poll_close(cx),
-            Channel::Secure(tls) => Pin::new(tls).poll_close(cx),
+            Channel::Plain(tcp) => Pin::new(tcp).poll_shutdown(cx),
+            Channel::Secure(tls) => Pin::new(tls).poll_shutdown(cx),
         }
     }
 }

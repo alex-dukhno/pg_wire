@@ -14,9 +14,12 @@
 
 use async_mutex::Mutex as AsyncMutex;
 use crate::connection::{
-    network::Network, Channel, ClientRequest, ConnSupervisor, Connection, Encryption, ProtocolConfiguration,
+    network::*, ClientRequest, ConnSupervisor, Connection, Encryption, ProtocolConfiguration,
 };
+#[cfg(any(feature = "mock_network", feature = "async_net"))]
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
+#[cfg(feature = "tokio_net")]
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::{io, sync::Arc};
 use crate::{HandShakeProcess, HandShakeStatus, BackendMessage};
 

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "mock_network"))]
 mod accept_client_request;
 #[cfg(test)]
 mod pg_frontend;
-#[cfg(test)]
+#[cfg(all(test, feature = "mock_network"))]
 mod read_query;

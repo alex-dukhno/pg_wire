@@ -1,24 +1,34 @@
-use smol::Async;
-use std::net::TcpListener;
+use std::error::Error;
+use std::{env, io};
 use pg_wire::*;
+use tokio::net::TcpListener;
 
 fn main() {
-    #[cfg(feature = "async_net")] //TODO: this is a workaround to run tests ¯\_(ツ)_/¯
-    smol::block_on(async {
-        let listener = Async::<TcpListener>::bind(([127, 0, 0, 1], 5432)).expect("OK");
-        println!("server started");
+    #[cfg(feature = "tokio_net")] //TODO: this is a workaround to run tests ¯\_(ツ)_/¯
+    {
+        // Create the runtime
+        let mut rt = tokio::runtime::Runtime::new().expect("run");
 
-        let config = ProtocolConfiguration::none();
-        let conn_supervisor = ConnSupervisor::new(0, 10);
-        let connection_manager = ConnectionManager::new(Network::from(listener), config, conn_supervisor);
+        // Spawn the root task
+        rt.block_on(async {
+            let addr = env::args()
+                .nth(1)
+                .unwrap_or_else(|| "127.0.0.1:5432".to_string());
 
-        loop {
-            match connection_manager.accept().await {
-                Err(io_error) => eprintln!("IO error {:?}", io_error),
-                Ok(Err(protocol_error)) => eprintln!("protocol error {:?}", protocol_error),
-                Ok(Ok(ClientRequest::Connect(mut connection))) => {
-                    println!("client connected from {:?}", connection.address());
-                    let sender = connection.sender();
+            println!("server started");
+
+            let listener = TcpListener::bind(addr).await.expect("bind to address");
+            let config = ProtocolConfiguration::none();
+            let conn_supervisor = ConnSupervisor::new(0, 10);
+            let connection_manager = ConnectionManager::new(Network::from(listener), config, conn_supervisor);
+
+            loop {
+                match connection_manager.accept().await {
+                    Err(io_error) => eprintln!("IO error {:?}", io_error),
+                    Ok(Err(protocol_error)) => eprintln!("protocol error {:?}", protocol_error),
+                    Ok(Ok(ClientRequest::Connect(mut connection))) => {
+                        println!("client connected from {:?}", connection.address());
+                        let sender = connection.sender();
                         loop {
                             match connection.receive().await {
                                 Err(e) => {
@@ -53,10 +63,11 @@ fn main() {
                             }
                         }
                     }
-                Ok(Ok(ClientRequest::QueryCancellation(_))) => {
-                    println!("Query cancellation is not supported")
+                    Ok(Ok(ClientRequest::QueryCancellation(_))) => {
+                        println!("Query cancellation is not supported")
+                    }
                 }
             }
-        }
-    })
+        });
+    }
 }

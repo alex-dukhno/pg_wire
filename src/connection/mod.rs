@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use async_mutex::Mutex as AsyncMutex;
-use futures_lite::{future::block_on, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use futures_lite::{future::block_on};
 use rand::Rng;
 use std::{
     collections::{HashMap, VecDeque},
@@ -25,6 +25,7 @@ use std::{
     task::{Context, Poll},
 };
 use crate::{BackendMessage, ConnId, CommandMessage, MessageDecoderStatus, MessageDecoder, ConnSecretKey};
+use crate::connection::network::*;
 
 mod async_native_tls;
 pub mod manager;
@@ -163,43 +164,6 @@ pub trait Sender: Send + Sync {
     /// Sends response messages to client. Most of the time it is a single
     /// message, select result one of the exceptional situation
     fn send(&self, query_result: Result<BackendMessage, BackendMessage>) -> io::Result<()>;
-}
-
-pub enum Channel {
-    Plain(network::Stream),
-    Secure(network::SecureStream),
-}
-
-impl AsyncRead for Channel {
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Channel::Plain(tcp) => Pin::new(tcp).poll_read(cx, buf),
-            Channel::Secure(tls) => Pin::new(tls).poll_read(cx, buf),
-        }
-    }
-}
-
-impl AsyncWrite for Channel {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Channel::Plain(tcp) => Pin::new(tcp).poll_write(cx, buf),
-            Channel::Secure(tls) => Pin::new(tls).poll_write(cx, buf),
-        }
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Channel::Plain(tcp) => Pin::new(tcp).poll_flush(cx),
-            Channel::Secure(tls) => Pin::new(tls).poll_flush(cx),
-        }
-    }
-
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Channel::Plain(tcp) => Pin::new(tcp).poll_close(cx),
-            Channel::Secure(tls) => Pin::new(tls).poll_close(cx),
-        }
-    }
 }
 
 /// Manages allocation of Connection IDs and secret keys.
@@ -342,6 +306,5 @@ impl ProtocolConfiguration {
     }
 }
 
-#[cfg(feature = "mock_network")]
 #[cfg(test)]
 mod tests;
