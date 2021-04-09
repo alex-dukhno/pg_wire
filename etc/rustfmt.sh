@@ -3,4 +3,4 @@
 cd "$(dirname "$0")"/..
 set -ex
 
-cargo clippy --all-targets --all-features
+cargo +nightly fmt --all

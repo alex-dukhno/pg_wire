@@ -13,15 +13,13 @@
 // limitations under the License.
 
 use super::pg_frontend;
-use crate::{
-    connection::{
-        listener::PgWireListener,
-        network::{mock::TestCase, Network},
-        ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
-    },
-    BackendMessage,
+use crate::connection::{
+    listener::PgWireListener,
+    network::{mock::TestCase, Network},
+    ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
 };
 use futures_lite::future::block_on;
+use pg_wire_payload::BackendMessage;
 use std::path::PathBuf;
 
 #[test]
@@ -31,7 +29,7 @@ fn trying_read_from_empty_stream() {
 
         let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
-            ProtocolConfiguration::none(),
+            ProtocolConfiguration::not_secure(),
             ConnSupervisor::new(1, 2),
         );
 
@@ -47,7 +45,7 @@ fn trying_read_only_length_of_ssl_message() {
 
         let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
-            ProtocolConfiguration::none(),
+            ProtocolConfiguration::not_secure(),
             ConnSupervisor::new(1, 2),
         );
 
@@ -63,7 +61,7 @@ fn sending_reject_notification_for_none_secure() {
 
         let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
-            ProtocolConfiguration::none(),
+            ProtocolConfiguration::not_secure(),
             ConnSupervisor::new(1, 2),
         );
 
@@ -118,7 +116,7 @@ fn successful_connection_handshake_for_none_secure() {
 
         let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
-            ProtocolConfiguration::none(),
+            ProtocolConfiguration::not_secure(),
             ConnSupervisor::new(1, 2),
         );
 
@@ -244,7 +242,7 @@ fn successful_cancel_request_connection() {
 
         let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
-            ProtocolConfiguration::none(),
+            ProtocolConfiguration::not_secure(),
             conn_supervisor,
         );
 
@@ -266,7 +264,7 @@ fn verification_failed_cancel_request_connection() {
 
         let connection_manager = PgWireListener::new(
             Network::from(test_case.clone()),
-            ProtocolConfiguration::none(),
+            ProtocolConfiguration::not_secure(),
             conn_supervisor,
         );
 

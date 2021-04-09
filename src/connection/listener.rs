@@ -16,9 +16,10 @@ use crate::{
     connection::{
         network::*, AcceptError, ClientRequest, ConnSupervisor, Connection, Encryption, ProtocolConfiguration,
     },
-    BackendMessage, HandShakeProcess, HandShakeStatus,
+    hand_shake::{HandShakeProcess, HandShakeStatus},
 };
 use async_mutex::Mutex as AsyncMutex;
+use pg_wire_payload::BackendMessage;
 use std::{io, sync::Arc};
 
 /// A PostgreSql connection server, listening for connections.

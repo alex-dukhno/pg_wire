@@ -16,10 +16,20 @@ use crate::{
     cursor::Cursor,
     errors::{MessageFormatError, MessageFormatErrorKind},
     frontend::CommandMessage,
-    messages::{BIND, CLOSE, DESCRIBE, EXECUTE, FLUSH, PARSE, QUERY, SYNC, TERMINATE},
-    PgFormat, PgType,
 };
+use pg_wire_payload::{PgFormat, PgType};
 use std::convert::TryFrom;
+pub use Status as MessageDecoderStatus;
+
+const QUERY: u8 = b'Q';
+const BIND: u8 = b'B';
+const CLOSE: u8 = b'C';
+const DESCRIBE: u8 = b'D';
+const EXECUTE: u8 = b'E';
+const FLUSH: u8 = b'H';
+const PARSE: u8 = b'P';
+const SYNC: u8 = b'S';
+const TERMINATE: u8 = b'X';
 
 /// Represents a status of a `MessageDecoder` stage
 #[derive(Debug, PartialEq)]

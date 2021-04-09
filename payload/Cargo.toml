@@ -1,0 +1,11 @@
+[package]
+name = "pg_wire_payload"
+version = "0.1.0"
+description = "Structs that represent binary payload of PostgreSQL Wire Protocol"
+license = "Apache-2.0"
+repository = "https://github.com/alex-dukhno/pg_wire"
+keywords = ["protocol", "postgresql", "postgres", "database"]
+authors = ["Alex Dukhno <alex.dukhno@icloud.com>"]
+edition = "2018"
+
+[dependencies]

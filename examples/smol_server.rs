@@ -24,7 +24,7 @@ fn main() {
         let listener = Async::<TcpListener>::bind(([127, 0, 0, 1], 5432)).expect("OK");
         println!("server started");
 
-        let config = ProtocolConfiguration::none();
+        let config = ProtocolConfiguration::not_secure();
         let conn_supervisor = ConnSupervisor::new(0, 10);
         let connection_manager = PgWireListener::new(Network::from(listener), config, conn_supervisor);
 
