@@ -115,7 +115,7 @@ impl Process {
                         }
                         SSL_REQUEST_CODE => {
                             self.state = Some(State::MessageLen);
-                            Ok(Status::UpdatingToSecureWithReadingBytes(4))
+                            Ok(Status::UpdatingToSecure)
                         }
                         otherwise => Err(HandShakeError::from(HandShakeErrorKind::UnsupportedClientRequest(
                             otherwise,
@@ -133,7 +133,7 @@ pub enum Status {
     /// Hand shake process requesting additional data to proceed further
     RequestingBytes(usize),
     /// Hand shake process requesting update to SSL and additional data to proceed further
-    UpdatingToSecureWithReadingBytes(usize),
+    UpdatingToSecure,
     /// Hand shake is finished. Contains client runtime settings, e.g. database, username
     Done(Vec<(String, String)>),
     /// Hand shake is for canceling request that is executed on `ConnId`
@@ -249,7 +249,7 @@ mod perform_hand_shake_loop {
 
         assert_eq!(
             process.next_stage(Some(&Vec::from(SSL_REQUEST_CODE))),
-            Ok(Status::UpdatingToSecureWithReadingBytes(4))
+            Ok(Status::UpdatingToSecure)
         );
 
         process

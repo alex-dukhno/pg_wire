@@ -23,7 +23,7 @@ The server always handles `select 1` SQL query
 
 Open your terminal and run the following command:
 ```shell
-cargo run --example smol_server --features tokio_net
+cargo run --example tokio_server --features tokio_net
 ```
 Open another terminal window and run:
 ```shell
