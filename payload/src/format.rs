@@ -12,8 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::errors::UnrecognizedFormat;
-use std::convert::TryFrom;
+use std::{
+    convert::TryFrom,
+    fmt::{self, Display, Formatter},
+};
+
+/// Represents an error if frontend sent unrecognizable format
+/// contains the integer code that was sent
+#[derive(Debug, PartialEq)]
+pub struct UnrecognizedFormat(pub(crate) i16);
+
+impl Display for UnrecognizedFormat {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown format code: {}", self.0)
+    }
+}
 
 /// PostgreSQL formats for transferring data
 /// `0` - textual representation

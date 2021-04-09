@@ -12,21 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{PgFormat, PgType};
-
-/// Frontend message that could be received during connection hand shake process
-#[derive(Debug, PartialEq)]
-pub enum HandShakeMessage {
-    /// Client requested GSSENC Request
-    GssencRequest,
-    /// Client requested SSL connection
-    SslRequest,
-    /// Connection setup message
-    Setup {
-        /// client parameters
-        params: Vec<(String, String)>,
-    },
-}
+use pg_wire_payload::{PgFormat, PgType};
 
 /// Frontend message that could be received during client server communication
 #[derive(Debug, PartialEq)]

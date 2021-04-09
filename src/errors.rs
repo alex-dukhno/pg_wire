@@ -12,34 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Oid;
-use std::fmt::{self, Display, Formatter};
-
 pub use hand_shake_error::*;
 pub use message_format_error::*;
 pub use payload_error::*;
-pub use type_value_decode_error::*;
-
-/// Represents an error if frontend sent unrecognizable format
-/// contains the integer code that was sent
-#[derive(Debug, PartialEq)]
-pub struct UnrecognizedFormat(pub(crate) i16);
-
-impl Display for UnrecognizedFormat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown format code: {}", self.0)
-    }
-}
-
-/// Represents an error if frontend sent [Oid] that is not supported
-#[derive(Debug, PartialEq)]
-pub struct NotSupportedOid(pub(crate) Oid);
-
-impl Display for NotSupportedOid {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "OID: '{}' is not supported", self.0)
-    }
-}
 
 mod hand_shake_error {
     use crate::{errors::PayloadError, request_codes::Code};
@@ -119,7 +94,8 @@ mod hand_shake_error {
 }
 
 mod message_format_error {
-    use crate::errors::{NotSupportedOid, PayloadError, UnrecognizedFormat};
+    use crate::PayloadError;
+    use pg_wire_payload::{NotSupportedOid, UnrecognizedFormat};
     use std::fmt::{self, Display, Formatter};
 
     /// An error which can be returned when decoding
@@ -190,6 +166,8 @@ mod message_format_error {
     mod formatting {
         use super::*;
         use crate::errors::PayloadErrorKind;
+        use pg_wire_payload::{PgFormat, PgType};
+        use std::convert::TryFrom;
 
         #[test]
         fn from_payload_error() {
@@ -202,7 +180,7 @@ mod message_format_error {
         #[test]
         fn from_not_supported_oid() {
             assert_eq!(
-                MessageFormatError::from(NotSupportedOid(100)).to_string(),
+                MessageFormatError::from(PgType::from_oid(100).unwrap_err()).to_string(),
                 "OID: '100' is not supported"
             );
         }
@@ -210,7 +188,7 @@ mod message_format_error {
         #[test]
         fn from_unrecognized_format() {
             assert_eq!(
-                MessageFormatError::from(UnrecognizedFormat(5)).to_string(),
+                MessageFormatError::from(PgFormat::try_from(5).unwrap_err()).to_string(),
                 "unknown format code: 5"
             );
         }
@@ -237,132 +215,6 @@ mod message_format_error {
                 MessageFormatError::from(MessageFormatErrorKind::InvalidTypeByte('U')).to_string(),
                 "invalid type byte in Describe frontend message: 'U'"
             );
-        }
-    }
-}
-
-mod type_value_decode_error {
-    use crate::types::PgType;
-    use std::{
-        fmt::{self, Display, Formatter},
-        num::ParseIntError,
-        str::Utf8Error,
-    };
-
-    /// An error which can be returned when decoding [Value](crate::types::Value)s from raw bytes
-    #[derive(Debug, PartialEq)]
-    pub struct TypeValueDecodeError<'e> {
-        kind: TypeValueDecodeErrorKind<'e>,
-    }
-
-    impl<'e> From<TypeValueDecodeErrorKind<'e>> for TypeValueDecodeError<'e> {
-        fn from(kind: TypeValueDecodeErrorKind<'e>) -> TypeValueDecodeError<'_> {
-            TypeValueDecodeError { kind }
-        }
-    }
-
-    #[derive(Debug, PartialEq)]
-    pub(crate) enum TypeValueDecodeErrorKind<'e> {
-        NotEnoughBytes {
-            required_bytes: u8,
-            source: &'e [u8],
-            pg_type: PgType,
-        },
-        CannotDecodeString {
-            cause: Utf8Error,
-            source: &'e [u8],
-        },
-        CannotParseBool {
-            source: &'e str,
-        },
-        CannotParseInt {
-            cause: ParseIntError,
-            source: &'e str,
-            pg_type: PgType,
-        },
-    }
-
-    impl<'e> Display for TypeValueDecodeError<'e> {
-        fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-            match &self.kind {
-                TypeValueDecodeErrorKind::NotEnoughBytes {
-                    required_bytes,
-                    source,
-                    pg_type,
-                } => write!(
-                    f,
-                    "{} type can not be decoded. Its size is {} bytes. Buffer content {:?}",
-                    pg_type, required_bytes, source
-                ),
-                TypeValueDecodeErrorKind::CannotDecodeString { cause, source } => {
-                    write!(
-                        f,
-                        "UTF-8 string can not be decoded from {:?}. The cause: \"{}\"",
-                        source, cause
-                    )
-                }
-                TypeValueDecodeErrorKind::CannotParseBool { source } => {
-                    write!(f, "bool type can not be decoded from '{}'", source)
-                }
-                TypeValueDecodeErrorKind::CannotParseInt { cause, source, pg_type } => {
-                    write!(
-                        f,
-                        "{} type can not be parsed from '{}'. The cause: \"{}\"",
-                        pg_type, source, cause
-                    )
-                }
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod formatting {
-        use super::*;
-        use std::{str, str::FromStr};
-
-        #[test]
-        fn not_enough_bytes() {
-            assert_eq!(
-                TypeValueDecodeError::from(TypeValueDecodeErrorKind::NotEnoughBytes {
-                    required_bytes: 8,
-                    source: &[0, 0, 1],
-                    pg_type: PgType::BigInt,
-                })
-                .to_string(),
-                "bigint type can not be decoded. Its size is 8 bytes. Buffer content [0, 0, 1]"
-            )
-        }
-
-        #[test]
-        fn can_not_decode_string() {
-            let non_utf_code = 0x96;
-            assert_eq!(TypeValueDecodeError::from(
-                TypeValueDecodeErrorKind::CannotDecodeString {
-                    cause: str::from_utf8(&[non_utf_code]).unwrap_err(),
-                    source: &[non_utf_code],
-                }
-            ).to_string(), "UTF-8 string can not be decoded from [150]. The cause: \"invalid utf-8 sequence of 1 bytes from index 0\"")
-        }
-
-        #[test]
-        fn can_not_parse_bool() {
-            assert_eq!(
-                TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseBool { source: "abc" }).to_string(),
-                "bool type can not be decoded from 'abc'"
-            )
-        }
-
-        #[test]
-        fn can_not_parse_integer() {
-            assert_eq!(
-                TypeValueDecodeError::from(TypeValueDecodeErrorKind::CannotParseInt {
-                    cause: i32::from_str("1.0").unwrap_err(),
-                    source: &"1.0",
-                    pg_type: PgType::Integer,
-                })
-                .to_string(),
-                "integer type can not be parsed from \'1.0\'. The cause: \"invalid digit found in string\""
-            )
         }
     }
 }

@@ -3,4 +3,4 @@
 cd "$(dirname "$0")"/..
 set -ex
 
-cargo +nightly fmt
+cargo test --all --features mock_net

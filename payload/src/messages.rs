@@ -33,16 +33,6 @@ const PARSE_COMPLETE: u8 = b'1';
 const BIND_COMPLETE: u8 = b'2';
 const CLOSE_COMPLETE: u8 = b'3';
 
-pub(crate) const QUERY: u8 = b'Q';
-pub(crate) const BIND: u8 = b'B';
-pub(crate) const CLOSE: u8 = b'C';
-pub(crate) const DESCRIBE: u8 = b'D';
-pub(crate) const EXECUTE: u8 = b'E';
-pub(crate) const FLUSH: u8 = b'H';
-pub(crate) const PARSE: u8 = b'P';
-pub(crate) const SYNC: u8 = b'S';
-pub(crate) const TERMINATE: u8 = b'X';
-
 /// Backend PostgreSQL Wire Protocol messages
 /// see [Protocol Flow](https://www.postgresql.org/docs/current/protocol-flow.html)
 #[allow(dead_code)]

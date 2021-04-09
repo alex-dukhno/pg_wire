@@ -16,8 +16,11 @@ use crate::{
     cursor::Cursor,
     errors::{HandShakeError, HandShakeErrorKind},
     request_codes::{Code, CANCEL_REQUEST_CODE, SSL_REQUEST_CODE, VERSION_1_CODE, VERSION_2_CODE, VERSION_3_CODE},
-    ConnId, ConnSecretKey,
 };
+use pg_wire_payload::{ConnId, ConnSecretKey};
+
+pub use Process as HandShakeProcess;
+pub use Status as HandShakeStatus;
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum State {
@@ -135,15 +138,6 @@ pub enum Status {
     Done(Vec<(String, String)>),
     /// Hand shake is for canceling request that is executed on `ConnId`
     Cancel(ConnId, ConnSecretKey),
-}
-
-/// Hand shake request to a server process
-#[derive(Debug, PartialEq)]
-pub enum Request {
-    /// Server should provide `Process` with buffer of request size
-    Buffer(usize),
-    /// Server should use SSL protocol over current connection stream
-    UpgradeToSsl,
 }
 
 #[cfg(test)]

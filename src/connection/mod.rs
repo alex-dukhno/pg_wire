@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use crate::{
-    connection::network::*, BackendMessage, CommandMessage, ConnId, ConnSecretKey, MessageDecoder, MessageDecoderStatus,
+    connection::network::*,
+    message_decoder::{MessageDecoder, MessageDecoderStatus},
+    CommandMessage,
 };
 use async_mutex::Mutex as AsyncMutex;
 use futures_lite::future::block_on;
+use pg_wire_payload::{BackendMessage, ConnId, ConnSecretKey};
 use rand::Rng;
 use std::{
     collections::{HashMap, VecDeque},
@@ -303,7 +306,7 @@ pub struct ProtocolConfiguration {
 #[allow(dead_code)]
 impl ProtocolConfiguration {
     /// Creates configuration that support neither `ssl` nor `gss` encryption
-    pub fn none() -> Self {
+    pub fn not_secure() -> Self {
         Self { ssl_conf: None }
     }
 
