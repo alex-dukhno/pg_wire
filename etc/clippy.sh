@@ -3,6 +3,6 @@
 cd "$(dirname "$0")"/..
 set -ex
 
-cargo clippy --features async_net \
-      && cargo clippy --features tokio_net \
-      && clippy --features mock_net
+cargo clippy --all --features async_net \
+      && cargo clippy --all --features tokio_net \
+      && cargo clippy --all --features mock_net

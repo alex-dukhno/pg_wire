@@ -44,7 +44,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --features ${{ matrix.feature }}
+          args: --all --features ${{ matrix.feature }}
 
   tests:
     needs:
