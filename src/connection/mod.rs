@@ -57,6 +57,7 @@ impl From<std::io::Error> for AcceptError {
 
 type Props = Vec<(String, String)>;
 
+/// Represents connection between client and server
 pub struct Connection {
     id: ConnId,
     #[allow(dead_code)]
@@ -69,6 +70,7 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Create new Connection
     pub fn new(
         id: ConnId,
         client_props: Props,
@@ -87,10 +89,12 @@ impl Connection {
         }
     }
 
+    /// Client Address
     pub fn address(&self) -> &SocketAddr {
         &self.address
     }
 
+    /// Create [ResponseSender] to send queries result to the client
     pub fn sender(&self) -> Arc<ResponseSender> {
         self.sender.clone()
     }
@@ -113,6 +117,7 @@ impl Connection {
         }
     }
 
+    /// Receive client messages
     pub async fn receive(&mut self) -> io::Result<Result<CommandMessage, ()>> {
         let message = match self.read_frontend_message().await {
             Ok(Ok(message)) => message,
@@ -138,7 +143,8 @@ impl Drop for Connection {
 /// Client request accepted from a client
 pub enum ClientRequest {
     /// Connection to perform queries
-    Connect(Connection),
+    // Connect(Connection),
+    Connect2((network::Channel, Props, ConnSupervisor, SocketAddr)),
     /// Connection to cancel queries of another client
     QueryCancellation(ConnId),
 }

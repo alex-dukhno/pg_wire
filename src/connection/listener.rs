@@ -13,14 +13,10 @@
 // limitations under the License.
 
 use crate::{
-    connection::{
-        network::*, AcceptError, ClientRequest, ConnSupervisor, Connection, Encryption, ProtocolConfiguration,
-    },
+    connection::{network::*, AcceptError, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration},
     hand_shake::{HandShakeProcess, HandShakeStatus},
 };
-use async_mutex::Mutex as AsyncMutex;
-use pg_wire_payload::BackendMessage;
-use std::{io, sync::Arc};
+use std::io;
 
 /// A PostgreSql connection server, listening for connections.
 pub struct PgWireListener {
@@ -57,7 +53,7 @@ impl PgWireListener {
                             local = channel.read_exact(&mut local).await.map(|_| local)?;
                             current = Some(local);
                         }
-                        Ok(HandShakeStatus::UpdatingToSecureWithReadingBytes(_len)) => {
+                        Ok(HandShakeStatus::UpdatingToSecure) => {
                             channel = match channel {
                                 Channel::Plain(mut channel) if self.protocol_config.ssl_support() => {
                                     channel.write_all(Encryption::AcceptSsl.into()).await?;
@@ -65,10 +61,12 @@ impl PgWireListener {
                                         Some((path, password)) => {
                                             match self.network.tls_accept(path, password, channel).await {
                                                 Ok(socket) => Channel::Secure(socket),
-                                                Err(err) => match err {
-                                                    AcceptError::NativeTls(_tls) => return Ok(Err(())),
-                                                    AcceptError::Io(io_error) => return Err(io_error),
-                                                },
+                                                Err(err) => {
+                                                    return match err {
+                                                        AcceptError::NativeTls(_tls) => Ok(Err(())),
+                                                        AcceptError::Io(io_error) => Err(io_error),
+                                                    }
+                                                }
                                             }
                                         }
                                         None => return Err(io::Error::from(io::ErrorKind::ConnectionAborted)),
@@ -91,78 +89,12 @@ impl PgWireListener {
                             }
                         }
                         Ok(HandShakeStatus::Done(props)) => {
-                            channel
-                                .write_all(BackendMessage::AuthenticationCleartextPassword.as_vec().as_slice())
-                                .await?;
-                            channel.flush().await?;
-                            let mut tag_buffer = [0u8; 1];
-                            let _tag = channel.read_exact(&mut tag_buffer).await.map(|_| tag_buffer[0]);
-                            let mut len_buffer = [0u8; 4];
-                            let len = channel
-                                .read_exact(&mut len_buffer)
-                                .await
-                                .map(|_| u32::from_be_bytes(len_buffer) as usize)?;
-                            let len = len - 4;
-                            let mut message_buffer = Vec::with_capacity(len);
-                            message_buffer.resize(len, b'0');
-                            let _message = channel.read_exact(&mut message_buffer).await.map(|_| message_buffer)?;
-                            channel
-                                .write_all(BackendMessage::AuthenticationOk.as_vec().as_slice())
-                                .await?;
-
-                            channel
-                                .write_all(
-                                    BackendMessage::ParameterStatus("client_encoding".to_owned(), "UTF8".to_owned())
-                                        .as_vec()
-                                        .as_slice(),
-                                )
-                                .await?;
-
-                            channel
-                                .write_all(
-                                    BackendMessage::ParameterStatus("DateStyle".to_owned(), "ISO".to_owned())
-                                        .as_vec()
-                                        .as_slice(),
-                                )
-                                .await?;
-
-                            channel
-                                .write_all(
-                                    BackendMessage::ParameterStatus("integer_datetimes".to_owned(), "off".to_owned())
-                                        .as_vec()
-                                        .as_slice(),
-                                )
-                                .await?;
-
-                            channel
-                                .write_all(
-                                    BackendMessage::ParameterStatus("server_version".to_owned(), "12.4".to_owned())
-                                        .as_vec()
-                                        .as_slice(),
-                                )
-                                .await?;
-
-                            let (conn_id, secret_key) = match self.conn_supervisor.alloc() {
-                                Ok((c, s)) => (c, s),
-                                Err(()) => return Ok(Err(())),
-                            };
-
-                            channel
-                                .write_all(BackendMessage::BackendKeyData(conn_id, secret_key).as_vec().as_slice())
-                                .await?;
-
-                            channel
-                                .write_all(BackendMessage::ReadyForQuery.as_vec().as_slice())
-                                .await?;
-
-                            let channel = Arc::new(AsyncMutex::new(channel));
-                            return Ok(Ok(ClientRequest::Connect(Connection::new(
-                                conn_id,
-                                props,
-                                address,
+                            return Ok(Ok(ClientRequest::Connect2((
                                 channel,
+                                props,
                                 self.conn_supervisor.clone(),
-                            ))));
+                                address,
+                            ))))
                         }
                         Err(_error) => {
                             return Ok(Err(()));
