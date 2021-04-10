@@ -14,7 +14,7 @@
 
 use crate::{
     connection::{
-        network::{Channel, mock::TestCase, Stream},
+        network::{mock::TestCase, Channel, Stream},
         ConnSupervisor, Connection,
     },
     CommandMessage,

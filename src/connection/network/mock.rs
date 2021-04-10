@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::connection::AcceptError;
+use crate::{connection::AcceptError, ConnSupervisor, PgWireListener, ProtocolConfiguration};
 pub use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use std::{
     io,
@@ -22,7 +22,6 @@ use std::{
     sync::{Arc, Mutex},
     task::{Context, Poll},
 };
-use crate::{PgWireListener, ProtocolConfiguration, ConnSupervisor};
 
 impl PgWireListener {
     /// creates new PostgreSql connection server

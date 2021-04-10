@@ -14,7 +14,7 @@
 
 #[cfg(not(feature = "tokio_net"))]
 use crate::connection::async_native_tls::{self, TlsStream};
-use crate::connection::AcceptError;
+use crate::{connection::AcceptError, ConnSupervisor, PgWireListener, ProtocolConfiguration};
 use async_io::Async;
 use blocking::Unblock;
 pub use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -26,7 +26,6 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
-use crate::{PgWireListener, ProtocolConfiguration, ConnSupervisor};
 
 impl PgWireListener {
     /// creates new PostgreSql connection server

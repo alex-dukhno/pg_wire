@@ -19,8 +19,7 @@
 compile_error!("feature \"async_net\" and feature \"tokio_net\" cannot be enabled at the same time");
 
 pub use connection::{
-    listener::PgWireListener, ClientRequest, ConnSupervisor, Connection, ProtocolConfiguration,
-    ResponseSender, Sender,
+    listener::PgWireListener, ClientRequest, ConnSupervisor, Connection, ProtocolConfiguration, ResponseSender, Sender,
 };
 pub use errors::{HandShakeError, MessageFormatError, PayloadError};
 pub use frontend::CommandMessage;

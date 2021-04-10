@@ -14,9 +14,7 @@
 
 use super::pg_frontend;
 use crate::connection::{
-    listener::PgWireListener,
-    network::mock::TestCase,
-    ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
+    listener::PgWireListener, network::mock::TestCase, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
 };
 use futures_lite::future::block_on;
 use std::path::PathBuf;
@@ -95,7 +93,6 @@ fn sending_accept_notification_for_ssl_only_secure() {
         assert_eq!(actual_content, expected_content);
     });
 }
-
 
 #[test]
 fn successful_connection_handshake_for_none_secure() {
@@ -242,11 +239,8 @@ fn successful_cancel_request_connection() {
             .as_vec()
             .as_slice()]);
 
-        let pg_wire_listener = PgWireListener::new(
-            test_case.clone(),
-            ProtocolConfiguration::not_secure(),
-            conn_supervisor,
-        );
+        let pg_wire_listener =
+            PgWireListener::new(test_case.clone(), ProtocolConfiguration::not_secure(), conn_supervisor);
 
         let result = pg_wire_listener.accept().await;
 
@@ -264,11 +258,8 @@ fn verification_failed_cancel_request_connection() {
             .as_vec()
             .as_slice()]);
 
-        let pg_wire_listener = PgWireListener::new(
-            test_case.clone(),
-            ProtocolConfiguration::not_secure(),
-            conn_supervisor,
-        );
+        let pg_wire_listener =
+            PgWireListener::new(test_case.clone(), ProtocolConfiguration::not_secure(), conn_supervisor);
 
         let result = pg_wire_listener.accept().await;
 

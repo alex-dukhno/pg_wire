@@ -19,8 +19,7 @@ fn main() {
     {
         use async_mutex::Mutex as AsyncMutex;
         use pg_wire::{
-            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration,
-            Sender,
+            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender,
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
         use std::{env, sync::Arc};
