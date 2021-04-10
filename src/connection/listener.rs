@@ -15,6 +15,7 @@
 use crate::{
     connection::{network::*, AcceptError, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration},
     hand_shake::{HandShakeProcess, HandShakeStatus},
+    Error,
 };
 use std::io;
 
@@ -27,7 +28,7 @@ pub struct PgWireListener {
 
 impl PgWireListener {
     /// Accept a new incoming connection from this listener.
-    pub async fn accept(&self) -> io::Result<Result<ClientRequest, ()>> {
+    pub async fn accept(&self) -> io::Result<Result<ClientRequest, Error>> {
         match self.network.accept().await {
             Ok((stream, address)) => {
                 let mut channel = Channel::Plain(stream);
@@ -50,7 +51,7 @@ impl PgWireListener {
                                                 Ok(socket) => Channel::Secure(socket),
                                                 Err(err) => {
                                                     return match err {
-                                                        AcceptError::NativeTls(_tls) => Ok(Err(())),
+                                                        AcceptError::NativeTls(tls) => Ok(Err(Error::from(tls))),
                                                         AcceptError::Io(io_error) => Err(io_error),
                                                     }
                                                 }
@@ -72,7 +73,7 @@ impl PgWireListener {
                             return if self.conn_supervisor.verify(conn_id, secret_key) {
                                 Ok(Ok(ClientRequest::QueryCancellation(conn_id)))
                             } else {
-                                Ok(Err(()))
+                                Ok(Err(Error::secret_keys_have_not_matched()))
                             }
                         }
                         Ok(HandShakeStatus::Done(props)) => {
@@ -83,8 +84,8 @@ impl PgWireListener {
                                 address,
                             ))))
                         }
-                        Err(_error) => {
-                            return Ok(Err(()));
+                        Err(error) => {
+                            return Ok(Err(Error::from(error)));
                         }
                     }
                 }

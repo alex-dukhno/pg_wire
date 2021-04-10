@@ -32,24 +32,24 @@ impl<'c> Cursor<'c> {
         self.buf = &self.buf[n..]
     }
 
-    fn peek_byte(&self) -> Result<u8, PayloadError<'c>> {
+    fn peek_byte(&self) -> Result<u8, PayloadError> {
         self.buf
             .get(0)
             .copied()
             .ok_or_else(|| PayloadError::from(PayloadErrorKind::EndOfBuffer))
     }
 
-    pub(crate) fn read_byte(&mut self) -> Result<u8, PayloadError<'c>> {
+    pub(crate) fn read_byte(&mut self) -> Result<u8, PayloadError> {
         let byte = self.peek_byte()?;
         self.advance(1);
         Ok(byte)
     }
 
-    fn consume_next(&mut self, size: usize) -> Result<&'c [u8], PayloadError<'c>> {
+    fn consume_next(&mut self, size: usize) -> Result<&'c [u8], PayloadError> {
         if self.buf.len() < size {
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: size as u8,
-                source: self.buf,
+                source: self.buf.to_vec(),
             }))
         } else {
             let buf = &self.buf[0..size];
@@ -61,39 +61,39 @@ impl<'c> Cursor<'c> {
     /// Returns the next null-terminated string. The null character is not
     /// included the returned string. The cursor is advanced past the null-
     /// terminated string.
-    pub(crate) fn read_cstr(&mut self) -> Result<&'c str, PayloadError<'c>> {
+    pub(crate) fn read_cstr(&mut self) -> Result<&'c str, PayloadError> {
         if let Some(pos) = self.buf.iter().position(|b| *b == 0) {
             let val = str::from_utf8(&self.buf[..pos]).map_err(|cause| {
                 PayloadError::from(PayloadErrorKind::InvalidUtfString {
                     cause,
-                    source: &self.buf[..pos],
+                    source: self.buf[..pos].to_vec(),
                 })
             })?;
             self.advance(pos + 1);
             Ok(val)
         } else {
             Err(PayloadError::from(PayloadErrorKind::CStringNotTerminated {
-                source: &self.buf,
+                source: self.buf.to_vec(),
             }))
         }
     }
 
     /// Reads the next 16-bit signed integer, advancing the cursor by two
     /// bytes.
-    pub(crate) fn read_i16(&mut self) -> Result<i16, PayloadError<'c>> {
+    pub(crate) fn read_i16(&mut self) -> Result<i16, PayloadError> {
         self.consume_next(2).map(|buf| i16::from_be_bytes([buf[0], buf[1]]))
     }
 
     /// Reads the next 32-bit signed integer, advancing the cursor by four
     /// bytes.
-    pub(crate) fn read_i32(&mut self) -> Result<i32, PayloadError<'c>> {
+    pub(crate) fn read_i32(&mut self) -> Result<i32, PayloadError> {
         self.consume_next(4)
             .map(|buf| i32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]))
     }
 
     /// Reads the next 32-bit unsigned integer, advancing the cursor by four
     /// bytes.
-    pub(crate) fn read_u32(&mut self) -> Result<u32, PayloadError<'c>> {
+    pub(crate) fn read_u32(&mut self) -> Result<u32, PayloadError> {
         self.read_i32().map(|val| val as u32)
     }
 }
@@ -133,7 +133,7 @@ mod tests {
         assert_eq!(
             cursor.read_cstr(),
             Err(PayloadError::from(PayloadErrorKind::CStringNotTerminated {
-                source: buffer.as_slice()
+                source: buffer.to_vec()
             }))
         );
     }
@@ -149,7 +149,7 @@ mod tests {
             cursor.read_cstr(),
             Err(PayloadError::from(PayloadErrorKind::InvalidUtfString {
                 cause: str::from_utf8(&buffer).unwrap_err(),
-                source: &buffer[..buffer.len() - 1]
+                source: buffer[..buffer.len() - 1].to_vec()
             }))
         );
     }
@@ -169,7 +169,7 @@ mod tests {
             cursor.read_i16(),
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: 2,
-                source: &buffer
+                source: buffer.to_vec()
             }))
         );
     }
@@ -189,7 +189,7 @@ mod tests {
             cursor.read_i32(),
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: 4,
-                source: &buffer
+                source: buffer.to_vec()
             }))
         );
     }
@@ -209,7 +209,7 @@ mod tests {
             cursor.read_u32(),
             Err(PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                 required: 4,
-                source: &buffer
+                source: buffer.to_vec()
             }))
         );
     }

@@ -13,18 +13,18 @@
 // limitations under the License.
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "async_net")] {
-        pub use async_net::*;
+    if #[cfg(feature = "async_io")] {
+        pub use async_io_net::*;
     } else if #[cfg(feature = "tokio_net")] {
         pub use tokio_net::*;
     } else if #[cfg(feature = "mock_net")] {
-        pub use mock::*;
+        pub use mock_net::*;
     }
 }
 
-#[cfg(feature = "async_net")]
-mod async_net;
+#[cfg(feature = "async_io")]
+mod async_io_net;
 #[cfg(feature = "mock_net")]
-pub(crate) mod mock;
+pub(crate) mod mock_net;
 #[cfg(feature = "tokio_net")]
 mod tokio_net;

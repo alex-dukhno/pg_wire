@@ -29,7 +29,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[cfg(feature = "async_net")]
+#[cfg(feature = "async_io")]
 mod async_native_tls;
 pub mod listener;
 pub mod network;
@@ -169,12 +169,8 @@ impl Sender for ResponseSender {
         Ok(())
     }
 
-    fn send(&self, query_result: Result<BackendMessage, BackendMessage>) -> io::Result<()> {
+    fn send(&self, message: BackendMessage) -> io::Result<()> {
         block_on(async {
-            let message: BackendMessage = match query_result {
-                Ok(event) => event,
-                Err(error) => error,
-            };
             self.channel
                 .lock()
                 .await
@@ -194,7 +190,7 @@ pub trait Sender: Send + Sync {
 
     /// Sends response messages to client. Most of the time it is a single
     /// message, select result one of the exceptional situation
-    fn send(&self, query_result: Result<BackendMessage, BackendMessage>) -> io::Result<()>;
+    fn send(&self, message: BackendMessage) -> io::Result<()>;
 }
 
 /// Manages allocation of Connection IDs and secret keys.

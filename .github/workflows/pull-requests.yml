@@ -32,7 +32,7 @@ jobs:
     strategy:
       matrix:
         feature:
-          - async_net
+          - async_io
           - tokio_net
           - mock_net
     runs-on: ubuntu-latest

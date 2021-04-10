@@ -12,9 +12,70 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use hand_shake_error::*;
-pub use message_format_error::*;
-pub use payload_error::*;
+pub(crate) use hand_shake_error::*;
+pub(crate) use message_format_error::*;
+pub(crate) use payload_error::*;
+use std::fmt::{self, Display, Formatter};
+
+/// Protocol Error
+#[derive(Debug)]
+pub struct Error {
+    kind: ErrorKind,
+}
+
+#[derive(Debug)]
+enum ErrorKind {
+    HandShake(HandShakeError),
+    MessageFormat(MessageFormatError),
+    TlsHandShake(native_tls::Error),
+    SecretKeysHaveNotMatch,
+}
+
+impl From<HandShakeError> for Error {
+    fn from(error: HandShakeError) -> Error {
+        Error {
+            kind: ErrorKind::HandShake(error),
+        }
+    }
+}
+
+impl From<MessageFormatError> for Error {
+    fn from(error: MessageFormatError) -> Error {
+        Error {
+            kind: ErrorKind::MessageFormat(error),
+        }
+    }
+}
+
+impl From<native_tls::Error> for Error {
+    fn from(error: native_tls::Error) -> Error {
+        Error {
+            kind: ErrorKind::TlsHandShake(error),
+        }
+    }
+}
+
+impl Error {
+    pub(crate) fn secret_keys_have_not_matched() -> Error {
+        Error {
+            kind: ErrorKind::SecretKeysHaveNotMatch,
+        }
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            ErrorKind::HandShake(error) => write!(f, "{}", error),
+            ErrorKind::MessageFormat(error) => write!(f, "{}", error),
+            ErrorKind::TlsHandShake(error) => write!(f, "{}", error),
+            ErrorKind::SecretKeysHaveNotMatch => write!(
+                f,
+                "secret for query cancellation has not matched secret of the current connection"
+            ),
+        }
+    }
+}
 
 mod hand_shake_error {
     use crate::{errors::PayloadError, request_codes::Code};
@@ -23,11 +84,11 @@ mod hand_shake_error {
     /// An error which can be returned during [HandShakeProcess](crate::hand_shake::Process)
     /// and client send erroneous bytes or functionality is not yet supported
     #[derive(Debug, PartialEq)]
-    pub struct HandShakeError<'e> {
-        kind: HandShakeErrorKind<'e>,
+    pub struct HandShakeError {
+        kind: HandShakeErrorKind,
     }
 
-    impl<'e> Display for HandShakeError<'e> {
+    impl<'e> Display for HandShakeError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             match &self.kind {
                 HandShakeErrorKind::UnsupportedProtocolVersion(code) => {
@@ -41,14 +102,14 @@ mod hand_shake_error {
         }
     }
 
-    impl<'e> From<HandShakeErrorKind<'e>> for HandShakeError<'e> {
+    impl<'e> From<HandShakeErrorKind> for HandShakeError {
         fn from(kind: HandShakeErrorKind) -> HandShakeError {
             HandShakeError { kind }
         }
     }
 
-    impl<'e> From<PayloadError<'e>> for HandShakeError<'e> {
-        fn from(error: PayloadError<'e>) -> HandShakeError {
+    impl<'e> From<PayloadError> for HandShakeError {
+        fn from(error: PayloadError) -> HandShakeError {
             HandShakeError {
                 kind: HandShakeErrorKind::PayloadError(error),
             }
@@ -56,10 +117,10 @@ mod hand_shake_error {
     }
 
     #[derive(Debug, PartialEq)]
-    pub(crate) enum HandShakeErrorKind<'e> {
+    pub(crate) enum HandShakeErrorKind {
         UnsupportedProtocolVersion(Code),
         UnsupportedClientRequest(Code),
-        PayloadError(PayloadError<'e>),
+        PayloadError(PayloadError),
     }
 
     #[cfg(test)]
@@ -94,48 +155,48 @@ mod hand_shake_error {
 }
 
 mod message_format_error {
-    use crate::PayloadError;
+    use crate::errors::PayloadError;
     use pg_wire_payload::{NotSupportedOid, UnrecognizedFormat};
     use std::fmt::{self, Display, Formatter};
 
     /// An error which can be returned when decoding
     /// [FrontendMessage](crate::messages::FrontendMessage)s from raw bytes
     #[derive(Debug, PartialEq)]
-    pub struct MessageFormatError<'e> {
-        kind: MessageFormatErrorKind<'e>,
+    pub struct MessageFormatError {
+        kind: MessageFormatErrorKind,
     }
 
-    impl<'e> From<MessageFormatErrorKind<'e>> for MessageFormatError<'e> {
-        fn from(kind: MessageFormatErrorKind<'e>) -> MessageFormatError {
+    impl From<MessageFormatErrorKind> for MessageFormatError {
+        fn from(kind: MessageFormatErrorKind) -> MessageFormatError {
             MessageFormatError { kind }
         }
     }
 
-    impl<'e> From<PayloadError<'e>> for MessageFormatError<'e> {
-        fn from(error: PayloadError<'e>) -> MessageFormatError {
+    impl From<PayloadError> for MessageFormatError {
+        fn from(error: PayloadError) -> MessageFormatError {
             MessageFormatError {
                 kind: MessageFormatErrorKind::PayloadError(error),
             }
         }
     }
 
-    impl<'e> From<NotSupportedOid> for MessageFormatError<'e> {
-        fn from(error: NotSupportedOid) -> MessageFormatError<'e> {
+    impl<'e> From<NotSupportedOid> for MessageFormatError {
+        fn from(error: NotSupportedOid) -> MessageFormatError {
             MessageFormatError {
                 kind: MessageFormatErrorKind::NotSupportedOid(error),
             }
         }
     }
 
-    impl<'e> From<UnrecognizedFormat> for MessageFormatError<'e> {
-        fn from(error: UnrecognizedFormat) -> MessageFormatError<'e> {
+    impl<'e> From<UnrecognizedFormat> for MessageFormatError {
+        fn from(error: UnrecognizedFormat) -> MessageFormatError {
             MessageFormatError {
                 kind: MessageFormatErrorKind::UnrecognizedFormat(error),
             }
         }
     }
 
-    impl<'e> Display for MessageFormatError<'e> {
+    impl<'e> Display for MessageFormatError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             match &self.kind {
                 MessageFormatErrorKind::PayloadError(error) => write!(f, "{}", error),
@@ -153,9 +214,9 @@ mod message_format_error {
     }
 
     #[derive(Debug, PartialEq)]
-    pub(crate) enum MessageFormatErrorKind<'e> {
+    pub(crate) enum MessageFormatErrorKind {
         MissingMessageTag,
-        PayloadError(PayloadError<'e>),
+        PayloadError(PayloadError),
         InvalidTypeByte(char),
         UnsupportedFrontendMessage(char),
         NotSupportedOid(NotSupportedOid),
@@ -227,17 +288,17 @@ mod payload_error {
 
     /// An error which can be returned when decoding raw bytes into [FrontendMessage](crate::messages::FrontendMessage)s
     #[derive(Debug, PartialEq)]
-    pub struct PayloadError<'e> {
-        kind: PayloadErrorKind<'e>,
+    pub struct PayloadError {
+        kind: PayloadErrorKind,
     }
 
-    impl<'e> From<PayloadErrorKind<'e>> for PayloadError<'e> {
-        fn from(kind: PayloadErrorKind<'e>) -> PayloadError {
+    impl From<PayloadErrorKind> for PayloadError {
+        fn from(kind: PayloadErrorKind) -> PayloadError {
             PayloadError { kind }
         }
     }
 
-    impl<'e> Display for PayloadError<'e> {
+    impl<'e> Display for PayloadError {
         fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
             match &self.kind {
                 PayloadErrorKind::InvalidUtfString { cause, source } => {
@@ -265,11 +326,11 @@ mod payload_error {
     }
 
     #[derive(Debug, PartialEq)]
-    pub(crate) enum PayloadErrorKind<'e> {
-        InvalidUtfString { cause: Utf8Error, source: &'e [u8] },
-        CStringNotTerminated { source: &'e [u8] },
+    pub(crate) enum PayloadErrorKind {
+        InvalidUtfString { cause: Utf8Error, source: Vec<u8> },
+        CStringNotTerminated { source: Vec<u8> },
         EndOfBuffer,
-        NotEnoughBytes { required: u8, source: &'e [u8] },
+        NotEnoughBytes { required: u8, source: Vec<u8> },
     }
 
     #[cfg(test)]
@@ -285,7 +346,7 @@ mod payload_error {
             assert_eq!(
                 PayloadError::from(PayloadErrorKind::InvalidUtfString {
                     cause: str::from_utf8(&buffer).unwrap_err(),
-                    source: &buffer,
+                    source: buffer.to_vec(),
                 }).to_string(), "[115, 111, 109, 101, 32, 115, 116, 114, 105, 110, 103, 150] is invalid UTF-8 string. The cause: \"invalid utf-8 sequence of 1 bytes from index 11\"")
         }
 
@@ -294,7 +355,7 @@ mod payload_error {
             let buffer = b"some string";
             assert_eq!(
                 PayloadError::from(PayloadErrorKind::CStringNotTerminated {
-                    source: buffer
+                    source: buffer.to_vec()
                 }).to_string(), "Buffer does not contain \\0 termination byte. Buffer content [115, 111, 109, 101, 32, 115, 116, 114, 105, 110, 103]"
             );
         }
@@ -313,7 +374,7 @@ mod payload_error {
             assert_eq!(
                 PayloadError::from(PayloadErrorKind::NotEnoughBytes {
                     required: 4,
-                    source: &buffer,
+                    source: buffer.to_vec(),
                 })
                 .to_string(),
                 "Buffer does not contain required number of bytes. Bytes required 4, buffer content [0, 123]"

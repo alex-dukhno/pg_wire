@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
+
 fn main() {
     #[cfg(not(feature = "async_io"))]
-    println!("execute `cargo run --example smol_server --features async_io` to run this example");
+    println!("execute `cargo run --example secured_smol_server --features async_io` to run this example");
     #[cfg(feature = "async_io")]
     smol::block_on(async {
         use async_mutex::Mutex as AsyncMutex;
@@ -29,7 +31,7 @@ fn main() {
         let listener = Async::<TcpListener>::bind(([127, 0, 0, 1], 5432)).expect("OK");
         println!("server started");
 
-        let config = ProtocolConfiguration::not_secure();
+        let config = ProtocolConfiguration::with_ssl(PathBuf::from("./etc/identity.pfx"), "password".to_owned());
         let conn_supervisor = ConnSupervisor::new(0, 10);
         let pg_wire_listener = PgWireListener::new(listener, config, conn_supervisor);
 

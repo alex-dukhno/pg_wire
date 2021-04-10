@@ -14,7 +14,8 @@
 
 use super::pg_frontend;
 use crate::connection::{
-    listener::PgWireListener, network::mock::TestCase, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
+    listener::PgWireListener, network::mock_net::TestCase, ClientRequest, ConnSupervisor, Encryption,
+    ProtocolConfiguration,
 };
 use futures_lite::future::block_on;
 use std::path::PathBuf;
@@ -263,6 +264,6 @@ fn verification_failed_cancel_request_connection() {
 
         let result = pg_wire_listener.accept().await;
 
-        assert!(matches!(result, Ok(Err(()))));
+        assert!(matches!(result, Ok(Err(_))));
     });
 }

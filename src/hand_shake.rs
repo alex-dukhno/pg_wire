@@ -76,7 +76,7 @@ impl Process {
     }
 
     /// Proceed to the next stage of client <-> server hand shake
-    pub fn next_stage<'e>(&mut self, payload: Option<&'e [u8]>) -> Result<Status, HandShakeError<'e>> {
+    pub fn next_stage(&mut self, payload: Option<&[u8]>) -> Result<Status, HandShakeError> {
         match self.state.take().and_then(|state| payload.map(|buf| (state, buf))) {
             None => {
                 self.state = Some(State::MessageLen);
