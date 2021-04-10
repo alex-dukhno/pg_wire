@@ -39,7 +39,7 @@ fn main() {
             let listener = TcpListener::bind(addr).await.expect("bind to address");
             let config = ProtocolConfiguration::not_secure();
             let conn_supervisor = ConnSupervisor::new(0, 10);
-            let connection_manager = PgWireListener::new(Network::from(listener), config, conn_supervisor);
+            let connection_manager = PgWireListener::new(listener, config, conn_supervisor);
 
             loop {
                 match connection_manager.accept().await {

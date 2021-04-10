@@ -22,6 +22,22 @@ use std::{
     sync::{Arc, Mutex},
     task::{Context, Poll},
 };
+use crate::{PgWireListener, ProtocolConfiguration, ConnSupervisor};
+
+impl PgWireListener {
+    /// creates new PostgreSql connection server
+    pub fn new(
+        listener: TestCase,
+        protocol_config: ProtocolConfiguration,
+        conn_supervisor: ConnSupervisor,
+    ) -> PgWireListener {
+        PgWireListener {
+            network: Network::from(listener),
+            protocol_config,
+            conn_supervisor,
+        }
+    }
+}
 
 impl From<TestCase> for Network {
     fn from(test_case: TestCase) -> Network {

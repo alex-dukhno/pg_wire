@@ -26,6 +26,22 @@ use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+use crate::{PgWireListener, ProtocolConfiguration, ConnSupervisor};
+
+impl PgWireListener {
+    /// creates new PostgreSql connection server
+    pub fn new(
+        listener: Async<TcpListener>,
+        protocol_config: ProtocolConfiguration,
+        conn_supervisor: ConnSupervisor,
+    ) -> PgWireListener {
+        PgWireListener {
+            network: Network::from(listener),
+            protocol_config,
+            conn_supervisor,
+        }
+    }
+}
 
 impl From<Async<TcpListener>> for Network {
     fn from(tcp: Async<TcpListener>) -> Network {

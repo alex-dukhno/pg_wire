@@ -27,6 +27,22 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 use tokio_native_tls::TlsStream;
+use crate::{PgWireListener, ProtocolConfiguration, ConnSupervisor};
+
+impl PgWireListener {
+    /// creates new PostgreSql connection server
+    pub fn new(
+        listener: TcpListener,
+        protocol_config: ProtocolConfiguration,
+        conn_supervisor: ConnSupervisor,
+    ) -> PgWireListener {
+        PgWireListener {
+            network: Network::from(listener),
+            protocol_config,
+            conn_supervisor,
+        }
+    }
+}
 
 impl From<TcpListener> for Network {
     fn from(tcp: TcpListener) -> Network {
