@@ -29,7 +29,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[cfg(feature = "async_net")]
+#[cfg(feature = "async_io")]
 mod async_native_tls;
 pub mod listener;
 pub mod network;

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 fn main() {
-    #[cfg(not(feature = "async_net"))]
-    println!("execute `cargo run --example smol_server --features async_net` to run this example");
-    #[cfg(feature = "async_net")]
+    #[cfg(not(feature = "async_io"))]
+    println!("execute `cargo run --example smol_server --features async_io` to run this example");
+    #[cfg(feature = "async_io")]
     smol::block_on(async {
         use async_mutex::Mutex as AsyncMutex;
         use futures_lite::{AsyncReadExt, AsyncWriteExt};

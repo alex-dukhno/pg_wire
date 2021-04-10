@@ -14,7 +14,7 @@
 
 use super::pg_frontend;
 use crate::connection::{
-    listener::PgWireListener, network::mock::TestCase, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
+    listener::PgWireListener, network::mock_net::TestCase, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration,
 };
 use futures_lite::future::block_on;
 use std::path::PathBuf;

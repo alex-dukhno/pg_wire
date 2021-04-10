@@ -14,7 +14,7 @@ include = [
 
 [features]
 default = []
-async_net = ["async-io", "blocking"]
+async_io = ["async-io", "blocking"]
 tokio_net = ["tokio", "tokio-native-tls"]
 mock_net = []
 
