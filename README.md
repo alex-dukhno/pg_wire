@@ -8,7 +8,15 @@ The crate supports:
  * [tokio](https://tokio.rs) runtime,
  * [smol](https://github.com/smol-rs/smol) runtimes. Actually, it depends on [async-io](https://github.com/smol-rs/async-io) on which smol is based.
 
+Add this to you `Cargo.toml` if you want to use it with `tokio` runtime
+```toml
+pg_wire = { version = "0.9.0", features = ["tokio_net"] }
+```
 
+Add this to you `Cargo.toml` if you want to enable `smol` runtime support
+```toml
+pg_wire = { version = "0.9.0", features = ["async_io"] }
+```
 
 ## Examples
 
