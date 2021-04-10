@@ -118,14 +118,12 @@ impl AsyncWrite for TestCase {
     }
 }
 
-#[doc(hidden)]
-pub struct Network {
+pub(crate) struct Network {
     data: TestCase,
 }
 
 impl Network {
-    #[doc(hidden)]
-    pub async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
+    pub(crate) async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
         use std::net::{IpAddr, Ipv4Addr};
         Ok((
             Stream::from(self.data.clone()),
@@ -133,8 +131,7 @@ impl Network {
         ))
     }
 
-    #[doc(hidden)]
-    pub async fn tls_accept(
+    pub(crate) async fn tls_accept(
         &self,
         _certificate_path: &Path,
         _password: &str,

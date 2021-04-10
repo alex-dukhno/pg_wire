@@ -76,7 +76,7 @@ impl PgWireListener {
                             }
                         }
                         Ok(HandShakeStatus::Done(props)) => {
-                            return Ok(Ok(ClientRequest::Connect2((
+                            return Ok(Ok(ClientRequest::Connect((
                                 channel,
                                 props,
                                 self.conn_supervisor.clone(),

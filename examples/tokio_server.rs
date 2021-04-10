@@ -19,7 +19,7 @@ fn main() {
     {
         use async_mutex::Mutex as AsyncMutex;
         use pg_wire::{
-            ClientRequest, CommandMessage, ConnSupervisor, Connection, Network, PgWireListener, ProtocolConfiguration,
+            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration,
             Sender,
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
@@ -46,7 +46,7 @@ fn main() {
                     Err(io_error) => eprintln!("IO error {:?}", io_error),
                     Ok(Err(protocol_error)) => eprintln!("protocol error {:?}", protocol_error),
 
-                    Ok(Ok(ClientRequest::Connect2((mut channel, props, conn_supervisor, address)))) => {
+                    Ok(Ok(ClientRequest::Connect((mut channel, props, conn_supervisor, address)))) => {
                         channel
                             .write_all(BackendMessage::AuthenticationCleartextPassword.as_vec().as_slice())
                             .await
