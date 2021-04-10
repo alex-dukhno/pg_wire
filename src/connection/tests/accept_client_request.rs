@@ -263,6 +263,6 @@ fn verification_failed_cancel_request_connection() {
 
         let result = pg_wire_listener.accept().await;
 
-        assert!(matches!(result, Ok(Err(()))));
+        assert!(matches!(result, Ok(Err(_))));
     });
 }

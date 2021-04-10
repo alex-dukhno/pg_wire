@@ -18,14 +18,16 @@
 #[cfg(all(feature = "async_net", feature = "tokio_net"))]
 compile_error!("feature \"async_net\" and feature \"tokio_net\" cannot be enabled at the same time");
 
-#[cfg(not(any(feature = "async_net", feature = "tokio_net")))]
+#[cfg(not(any(feature = "async_net", feature = "tokio_net", feature = "mock_net")))]
 compile_error!("at least one of the features: \"async_net\", \"tokio_net\" or \"mock_net\" should be enabled");
 
 pub use connection::{
     listener::PgWireListener, ClientRequest, ConnSupervisor, Connection, ProtocolConfiguration, ResponseSender, Sender,
 };
-pub use errors::{HandShakeError, MessageFormatError, PayloadError};
+pub use errors::Error;
 pub use frontend::CommandMessage;
+
+pub use pg_wire_payload::*;
 
 mod connection;
 mod cursor;

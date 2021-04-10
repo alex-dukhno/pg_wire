@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use pg_wire::ResponseSender;
-
 fn main() {
     #[cfg(not(feature = "async_net"))]
     println!("execute `cargo run --example smol_server --features async_net` to run this example");
@@ -22,7 +20,7 @@ fn main() {
         use async_mutex::Mutex as AsyncMutex;
         use futures_lite::{AsyncReadExt, AsyncWriteExt};
         use pg_wire::{
-            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender,
+            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
         use smol::Async;
@@ -33,12 +31,12 @@ fn main() {
 
         let config = ProtocolConfiguration::not_secure();
         let conn_supervisor = ConnSupervisor::new(0, 10);
-        let connection_manager = PgWireListener::new(listener, config, conn_supervisor);
+        let pg_wire_listener = PgWireListener::new(listener, config, conn_supervisor);
 
         loop {
-            match connection_manager.accept().await {
+            match pg_wire_listener.accept().await {
                 Err(io_error) => eprintln!("IO error {:?}", io_error),
-                Ok(Err(protocol_error)) => eprintln!("protocol error {:?}", protocol_error),
+                Ok(Err(protocol_error)) => eprintln!("protocol error {}", protocol_error),
                 Ok(Ok(ClientRequest::Connect((mut channel, props, conn_supervisor, address)))) => {
                     channel
                         .write_all(BackendMessage::AuthenticationCleartextPassword.as_vec().as_slice())
