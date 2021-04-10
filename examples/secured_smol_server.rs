@@ -24,8 +24,7 @@ fn main() {
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
         use smol::Async;
-        use std::{net::TcpListener, sync::Arc};
-        use std::path::PathBuf;
+        use std::{net::TcpListener, path::PathBuf, sync::Arc};
 
         let listener = Async::<TcpListener>::bind(([127, 0, 0, 1], 5432)).expect("OK");
         println!("server started");
