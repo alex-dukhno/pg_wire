@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use pg_wire::ResponseSender;
+
 fn main() {
     #[cfg(not(feature = "async_net"))]
     println!("execute `cargo run --example smol_server --features async_net` to run this example");
@@ -116,18 +118,18 @@ fn main() {
                                     println!("received query: '{}'", sql);
                                     println!("but anyway we will handle 'select 1'");
                                     sender
-                                        .send(Ok(BackendMessage::RowDescription(vec![ColumnMetadata::new(
+                                        .send(BackendMessage::RowDescription(vec![ColumnMetadata::new(
                                             &"col1",
                                             PgType::Integer,
-                                        )])))
+                                        )]))
                                         .expect("Ok");
                                     sender
-                                        .send(Ok(BackendMessage::DataRow(vec!["1".to_owned()])))
+                                        .send(BackendMessage::DataRow(vec!["1".to_owned()]))
                                         .expect("Ok");
                                     sender
-                                        .send(Ok(BackendMessage::CommandComplete("SELECT 1".to_owned())))
+                                        .send(BackendMessage::CommandComplete("SELECT 1".to_owned()))
                                         .expect("Ok");
-                                    sender.send(Ok(BackendMessage::ReadyForQuery)).expect("Ok");
+                                    sender.send(BackendMessage::ReadyForQuery).expect("Ok");
                                 }
                                 CommandMessage::Terminate => {
                                     println!("close connection");
@@ -135,8 +137,8 @@ fn main() {
                                 }
                                 other => {
                                     println!("{:?} is not supported. Only simple query is supported", other);
-                                    sender.send(Err(BackendMessage::NoticeResponse)).expect("Ok");
-                                    sender.send(Ok(BackendMessage::ReadyForQuery)).expect("Ok");
+                                    sender.send(BackendMessage::NoticeResponse).expect("Ok");
+                                    sender.send(BackendMessage::ReadyForQuery).expect("Ok");
                                 }
                             },
                         }

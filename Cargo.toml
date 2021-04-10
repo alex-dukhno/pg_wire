@@ -1,6 +1,6 @@
 [package]
 name = "pg_wire"
-version = "0.7.0"
+version = "0.8.0"
 description = "Server Side implementation of PostgreSQL Wire Protocol"
 license = "Apache-2.0"
 repository = "https://github.com/alex-dukhno/pg_wire"
@@ -19,7 +19,7 @@ tokio_net = ["tokio", "tokio-native-tls"]
 mock_net = []
 
 [dependencies]
-pg_wire_payload = { version = "0.1.0" }
+pg_wire_payload = "0.1.0"
 
 async-mutex = "1.4.0"
 async-io = { version = "1.3.1", optional = true }
@@ -36,5 +36,3 @@ native-tls = "0.2.7"
 rstest = "0.7.0"
 smol = "1.2.5"
 tokio = { version = "1.4.0", features = ["net", "io-util", "rt", "rt-multi-thread"]}
-
-#[workspace]
