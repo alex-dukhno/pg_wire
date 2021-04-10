@@ -129,9 +129,7 @@ fn main() {
                                                 PgType::Integer,
                                             )]))
                                             .expect("Ok");
-                                        sender
-                                            .send(BackendMessage::DataRow(vec!["1".to_owned()]))
-                                            .expect("Ok");
+                                        sender.send(BackendMessage::DataRow(vec!["1".to_owned()])).expect("Ok");
                                         sender
                                             .send(BackendMessage::CommandComplete("SELECT 1".to_owned()))
                                             .expect("Ok");

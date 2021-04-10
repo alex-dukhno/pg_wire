@@ -20,7 +20,7 @@ use std::fmt::{self, Display, Formatter};
 /// Protocol Error
 #[derive(Debug)]
 pub struct Error {
-    kind: ErrorKind
+    kind: ErrorKind,
 }
 
 #[derive(Debug)]
@@ -28,13 +28,13 @@ enum ErrorKind {
     HandShake(HandShakeError),
     MessageFormat(MessageFormatError),
     TlsHandShake(native_tls::Error),
-    SecretKeysHaveNotMatch
+    SecretKeysHaveNotMatch,
 }
 
 impl From<HandShakeError> for Error {
     fn from(error: HandShakeError) -> Error {
         Error {
-            kind: ErrorKind::HandShake(error)
+            kind: ErrorKind::HandShake(error),
         }
     }
 }
@@ -42,7 +42,7 @@ impl From<HandShakeError> for Error {
 impl From<MessageFormatError> for Error {
     fn from(error: MessageFormatError) -> Error {
         Error {
-            kind: ErrorKind::MessageFormat(error)
+            kind: ErrorKind::MessageFormat(error),
         }
     }
 }
@@ -50,14 +50,16 @@ impl From<MessageFormatError> for Error {
 impl From<native_tls::Error> for Error {
     fn from(error: native_tls::Error) -> Error {
         Error {
-            kind: ErrorKind::TlsHandShake(error)
+            kind: ErrorKind::TlsHandShake(error),
         }
     }
 }
 
 impl Error {
     pub(crate) fn secret_keys_have_not_matched() -> Error {
-        Error { kind: ErrorKind::SecretKeysHaveNotMatch }
+        Error {
+            kind: ErrorKind::SecretKeysHaveNotMatch,
+        }
     }
 }
 
@@ -67,7 +69,10 @@ impl Display for Error {
             ErrorKind::HandShake(error) => write!(f, "{}", error),
             ErrorKind::MessageFormat(error) => write!(f, "{}", error),
             ErrorKind::TlsHandShake(error) => write!(f, "{}", error),
-            ErrorKind::SecretKeysHaveNotMatch => write!(f, "secret for query cancellation has not matched secret of the current connection")
+            ErrorKind::SecretKeysHaveNotMatch => write!(
+                f,
+                "secret for query cancellation has not matched secret of the current connection"
+            ),
         }
     }
 }
@@ -150,9 +155,9 @@ mod hand_shake_error {
 }
 
 mod message_format_error {
+    use crate::errors::PayloadError;
     use pg_wire_payload::{NotSupportedOid, UnrecognizedFormat};
     use std::fmt::{self, Display, Formatter};
-    use crate::errors::PayloadError;
 
     /// An error which can be returned when decoding
     /// [FrontendMessage](crate::messages::FrontendMessage)s from raw bytes

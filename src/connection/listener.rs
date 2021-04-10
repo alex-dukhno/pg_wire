@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{connection::{network::*, AcceptError, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration}, hand_shake::{HandShakeProcess, HandShakeStatus}, Error};
+use crate::{
+    connection::{network::*, AcceptError, ClientRequest, ConnSupervisor, Encryption, ProtocolConfiguration},
+    hand_shake::{HandShakeProcess, HandShakeStatus},
+    Error,
+};
 use std::io;
 
 /// A PostgreSql connection server, listening for connections.

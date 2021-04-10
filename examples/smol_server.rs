@@ -20,7 +20,7 @@ fn main() {
         use async_mutex::Mutex as AsyncMutex;
         use futures_lite::{AsyncReadExt, AsyncWriteExt};
         use pg_wire::{
-            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender
+            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender,
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
         use smol::Async;
@@ -121,9 +121,7 @@ fn main() {
                                             PgType::Integer,
                                         )]))
                                         .expect("Ok");
-                                    sender
-                                        .send(BackendMessage::DataRow(vec!["1".to_owned()]))
-                                        .expect("Ok");
+                                    sender.send(BackendMessage::DataRow(vec!["1".to_owned()])).expect("Ok");
                                     sender
                                         .send(BackendMessage::CommandComplete("SELECT 1".to_owned()))
                                         .expect("Ok");

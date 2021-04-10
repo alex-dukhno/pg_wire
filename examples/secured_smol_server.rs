@@ -18,11 +18,11 @@ fn main() {
     #[cfg(not(feature = "async_io"))]
     println!("execute `cargo run --example secured_smol_server --features async_io` to run this example");
     #[cfg(feature = "async_io")]
-        smol::block_on(async {
+    smol::block_on(async {
         use async_mutex::Mutex as AsyncMutex;
         use futures_lite::{AsyncReadExt, AsyncWriteExt};
         use pg_wire::{
-            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender
+            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender,
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
         use smol::Async;
@@ -123,9 +123,7 @@ fn main() {
                                             PgType::Integer,
                                         )]))
                                         .expect("Ok");
-                                    sender
-                                        .send(BackendMessage::DataRow(vec!["1".to_owned()]))
-                                        .expect("Ok");
+                                    sender.send(BackendMessage::DataRow(vec!["1".to_owned()])).expect("Ok");
                                     sender
                                         .send(BackendMessage::CommandComplete("SELECT 1".to_owned()))
                                         .expect("Ok");
