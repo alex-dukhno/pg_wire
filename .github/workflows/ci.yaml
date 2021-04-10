@@ -22,11 +22,9 @@ jobs:
         with:
           command: tarpaulin
           args: --all --ignore-tests -o Lcov --output-dir ./coverage --features mock_net
-      - uses: actions-rs/cargo@v1
-        with:
-          command: tarpaulin
-          args: --all --ignore-tests -o Lcov --output-dir ../coverage
-          working-directory: ./payload
+      - name: payload tests
+        run: cargo tarpaulin --all --ignore-tests -o Lcov --output-dir ../coverage
+        working-directory: ./payload
       - uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
