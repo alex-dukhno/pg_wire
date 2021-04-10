@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
-
 fn main() {
     #[cfg(not(feature = "async_io"))]
     println!("execute `cargo run --example secured_smol_server --features async_io` to run this example");
@@ -26,7 +24,7 @@ fn main() {
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
         use smol::Async;
-        use std::{net::TcpListener, sync::Arc};
+        use std::{net::TcpListener, path::PathBuf, sync::Arc};
 
         let listener = Async::<TcpListener>::bind(([127, 0, 0, 1], 5432)).expect("OK");
         println!("server started");
