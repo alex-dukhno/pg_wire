@@ -66,7 +66,7 @@ pub struct Connection {
     address: SocketAddr,
     channel: Arc<AsyncMutex<Channel>>,
     supervisor: ConnSupervisor,
-    sender: Arc<ResponseSender>,
+    sender: ResponseSender,
 }
 
 impl Connection {
@@ -78,7 +78,7 @@ impl Connection {
         channel: Arc<AsyncMutex<Channel>>,
         supervisor: ConnSupervisor,
     ) -> Connection {
-        let sender = Arc::new(ResponseSender::new(channel.clone()));
+        let sender = ResponseSender::new(channel.clone());
         Connection {
             id,
             client_props,
@@ -95,7 +95,7 @@ impl Connection {
     }
 
     /// Create [ResponseSender] to send queries result to the client
-    pub fn sender(&self) -> Arc<ResponseSender> {
+    pub fn sender(&self) -> ResponseSender {
         self.sender.clone()
     }
 
@@ -142,14 +142,14 @@ impl Drop for Connection {
 
 /// Client request accepted from a client
 pub enum ClientRequest {
-    /// Connection to perform queries
-    // Connect(Connection),
-    Connect2((network::Channel, Props, ConnSupervisor, SocketAddr)),
+    /// Connection data and "infrastructure" to perform queries
+    Connect((network::Channel, Props, ConnSupervisor, SocketAddr)),
     /// Connection to cancel queries of another client
     QueryCancellation(ConnId),
 }
 
 /// Responsible for sending messages back to client
+#[derive(Clone)]
 pub struct ResponseSender {
     channel: Arc<AsyncMutex<Channel>>,
 }

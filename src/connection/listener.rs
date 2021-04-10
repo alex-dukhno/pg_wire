@@ -20,25 +20,12 @@ use std::io;
 
 /// A PostgreSql connection server, listening for connections.
 pub struct PgWireListener {
-    network: Network,
-    protocol_config: ProtocolConfiguration,
-    conn_supervisor: ConnSupervisor,
+    pub(crate) network: Network,
+    pub(crate) protocol_config: ProtocolConfiguration,
+    pub(crate) conn_supervisor: ConnSupervisor,
 }
 
 impl PgWireListener {
-    /// creates new PostgreSql connection server
-    pub fn new(
-        network: Network,
-        protocol_config: ProtocolConfiguration,
-        conn_supervisor: ConnSupervisor,
-    ) -> PgWireListener {
-        PgWireListener {
-            network,
-            protocol_config,
-            conn_supervisor,
-        }
-    }
-
     /// Accept a new incoming connection from this listener.
     pub async fn accept(&self) -> io::Result<Result<ClientRequest, ()>> {
         match self.network.accept().await {
@@ -89,7 +76,7 @@ impl PgWireListener {
                             }
                         }
                         Ok(HandShakeStatus::Done(props)) => {
-                            return Ok(Ok(ClientRequest::Connect2((
+                            return Ok(Ok(ClientRequest::Connect((
                                 channel,
                                 props,
                                 self.conn_supervisor.clone(),

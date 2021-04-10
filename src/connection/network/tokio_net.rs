@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::connection::AcceptError;
+use crate::{connection::AcceptError, ConnSupervisor, PgWireListener, ProtocolConfiguration};
 use std::{
     io,
     net::SocketAddr,
@@ -27,6 +27,21 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 use tokio_native_tls::TlsStream;
+
+impl PgWireListener {
+    /// creates new PostgreSql connection server
+    pub fn new(
+        listener: TcpListener,
+        protocol_config: ProtocolConfiguration,
+        conn_supervisor: ConnSupervisor,
+    ) -> PgWireListener {
+        PgWireListener {
+            network: Network::from(listener),
+            protocol_config,
+            conn_supervisor,
+        }
+    }
+}
 
 impl From<TcpListener> for Network {
     fn from(tcp: TcpListener) -> Network {

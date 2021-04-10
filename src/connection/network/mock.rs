@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::connection::AcceptError;
+use crate::{connection::AcceptError, ConnSupervisor, PgWireListener, ProtocolConfiguration};
 pub use futures_lite::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use std::{
     io,
@@ -22,6 +22,21 @@ use std::{
     sync::{Arc, Mutex},
     task::{Context, Poll},
 };
+
+impl PgWireListener {
+    /// creates new PostgreSql connection server
+    pub fn new(
+        listener: TestCase,
+        protocol_config: ProtocolConfiguration,
+        conn_supervisor: ConnSupervisor,
+    ) -> PgWireListener {
+        PgWireListener {
+            network: Network::from(listener),
+            protocol_config,
+            conn_supervisor,
+        }
+    }
+}
 
 impl From<TestCase> for Network {
     fn from(test_case: TestCase) -> Network {
@@ -102,14 +117,12 @@ impl AsyncWrite for TestCase {
     }
 }
 
-#[doc(hidden)]
-pub struct Network {
+pub(crate) struct Network {
     data: TestCase,
 }
 
 impl Network {
-    #[doc(hidden)]
-    pub async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
+    pub(crate) async fn accept(&self) -> io::Result<(Stream, SocketAddr)> {
         use std::net::{IpAddr, Ipv4Addr};
         Ok((
             Stream::from(self.data.clone()),
@@ -117,8 +130,7 @@ impl Network {
         ))
     }
 
-    #[doc(hidden)]
-    pub async fn tls_accept(
+    pub(crate) async fn tls_accept(
         &self,
         _certificate_path: &Path,
         _password: &str,

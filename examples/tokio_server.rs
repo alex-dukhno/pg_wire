@@ -19,8 +19,7 @@ fn main() {
     {
         use async_mutex::Mutex as AsyncMutex;
         use pg_wire::{
-            ClientRequest, CommandMessage, ConnSupervisor, Connection, Network, PgWireListener, ProtocolConfiguration,
-            Sender,
+            ClientRequest, CommandMessage, ConnSupervisor, Connection, PgWireListener, ProtocolConfiguration, Sender,
         };
         use pg_wire_payload::{BackendMessage, ColumnMetadata, PgType};
         use std::{env, sync::Arc};
@@ -39,14 +38,14 @@ fn main() {
             let listener = TcpListener::bind(addr).await.expect("bind to address");
             let config = ProtocolConfiguration::not_secure();
             let conn_supervisor = ConnSupervisor::new(0, 10);
-            let connection_manager = PgWireListener::new(Network::from(listener), config, conn_supervisor);
+            let connection_manager = PgWireListener::new(listener, config, conn_supervisor);
 
             loop {
                 match connection_manager.accept().await {
                     Err(io_error) => eprintln!("IO error {:?}", io_error),
                     Ok(Err(protocol_error)) => eprintln!("protocol error {:?}", protocol_error),
 
-                    Ok(Ok(ClientRequest::Connect2((mut channel, props, conn_supervisor, address)))) => {
+                    Ok(Ok(ClientRequest::Connect((mut channel, props, conn_supervisor, address)))) => {
                         channel
                             .write_all(BackendMessage::AuthenticationCleartextPassword.as_vec().as_slice())
                             .await
