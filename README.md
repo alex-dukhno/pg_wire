@@ -2,6 +2,8 @@
 
 ![ci](https://github.com/alex-dukhno/pg_wire/workflows/ci/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/alex-dukhno/pg_wire/badge.svg?branch=main)](https://coveralls.io/github/alex-dukhno/pg_wire?branch=main)
+[![Cargo](https://img.shields.io/crates/v/pg_wire.svg)](https://crates.io/crates/pg_wire)
+[![Documentation](https://docs.rs/pg_wire/badge.svg)](https://docs.rs/pg_wire)
 <a href="https://discord.gg/PUcTcfU"><img src="https://img.shields.io/discord/509773073294295082.svg?logo=discord"></a>
 
 The crate supports:
