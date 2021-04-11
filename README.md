@@ -12,12 +12,12 @@ The crate supports:
 
 Add this to you `Cargo.toml` if you want to use it with `tokio` runtime
 ```toml
-pg_wire = { version = "0.9.0", features = ["tokio_net"] }
+pg_wire = { version = "0.8", features = ["tokio_net"] }
 ```
 
 Add this to you `Cargo.toml` if you want to enable `smol` runtime support
 ```toml
-pg_wire = { version = "0.9.0", features = ["async_io"] }
+pg_wire = { version = "0.8", features = ["async_io"] }
 ```
 
 ## Examples
