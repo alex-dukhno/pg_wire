@@ -12,6 +12,9 @@ include = [
     "Cargo.toml",
 ]
 
+[package.metadata.docs.rs]
+features = ["mock_net"]
+
 [features]
 default = []
 async_io = ["async-io", "blocking"]
@@ -35,4 +38,4 @@ native-tls = "0.2.7"
 [dev-dependencies]
 rstest = "0.7.0"
 smol = "1.2.5"
-tokio = { version = "1.4.0", features = ["net", "io-util", "rt", "rt-multi-thread"]}
+tokio = { version = "1.4.0", features = ["net", "io-util", "rt", "rt-multi-thread"] }
