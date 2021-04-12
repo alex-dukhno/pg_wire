@@ -1,4 +1,4 @@
-name: ci
+name: Merge
 
 on:
   push:
@@ -22,9 +22,6 @@ jobs:
         with:
           command: tarpaulin
           args: --all --ignore-tests -o Lcov --output-dir ./coverage --features mock_net
-      - name: payload tests
-        run: cargo tarpaulin --all --ignore-tests -o Lcov --output-dir ../coverage
-        working-directory: ./payload
       - uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
