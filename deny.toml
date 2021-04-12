@@ -1,0 +1,20 @@
+[bans]
+multiple-versions = "deny"
+
+[licenses]
+private = { ignore = true }
+unlicensed = "deny"
+confidence-threshold = 0.93
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "MIT",
+]
+exceptions = [
+    # smol use wepoll
+    { allow = ["MPL-2.0"], name = "wepoll-sys" },
+]
+
+[sources]
+unknown-git = "deny"
+unknown-registry = "deny"
