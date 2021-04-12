@@ -20,6 +20,10 @@ Add this to you `Cargo.toml` if you want to enable `smol` runtime support
 pg_wire = { version = "0.8", features = ["async_io"] }
 ```
 
+## Legal Notice
+
+This crate includes source code with modification from [materialize](https://github.com/MaterializeInc/materialize) project
+
 ## Examples
 
 ### Using smol runtime
