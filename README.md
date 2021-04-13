@@ -1,5 +1,11 @@
 # PostgreSQL Wire Protocol
 
+## Legal Notice
+
+This crate includes source code with modification from [materialize](https://github.com/MaterializeInc/materialize) project which is licensed under BSL 1.1.
+BSL does not allow to redistribute modified code under Open source license therefore the development of the crates (`pg_wire` and `pg_wire_payload`) are stopped,
+all versions is yanked from https://crates.io/ and this repo is going to be archived.
+
 ![ci](https://github.com/alex-dukhno/pg_wire/workflows/ci/badge.svg)
 [![Coverage Status](https://coveralls.io/repos/github/alex-dukhno/pg_wire/badge.svg?branch=main)](https://coveralls.io/github/alex-dukhno/pg_wire?branch=main)
 [![Cargo](https://img.shields.io/crates/v/pg_wire.svg)](https://crates.io/crates/pg_wire)
@@ -19,10 +25,6 @@ Add this to you `Cargo.toml` if you want to enable `smol` runtime support
 ```toml
 pg_wire = { version = "0.8", features = ["async_io"] }
 ```
-
-## Legal Notice
-
-This crate includes source code with modification from [materialize](https://github.com/MaterializeInc/materialize) project
 
 ## Examples
 
