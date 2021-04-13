@@ -4,6 +4,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/alex-dukhno/pg_wire/badge.svg?branch=main)](https://coveralls.io/github/alex-dukhno/pg_wire?branch=main)
 [![Cargo](https://img.shields.io/crates/v/pg_wire.svg)](https://crates.io/crates/pg_wire)
 [![Documentation](https://docs.rs/pg_wire/badge.svg)](https://docs.rs/pg_wire)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Falex-dukhno%2Fpg_wire.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Falex-dukhno%2Fpg_wire?ref=badge_shield)
 <a href="https://discord.gg/PUcTcfU"><img src="https://img.shields.io/discord/509773073294295082.svg?logo=discord"></a>
 
 The crate supports:
@@ -75,3 +76,7 @@ postgres=>
 ```
 
 The server always handles `select 1` SQL query
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Falex-dukhno%2Fpg_wire.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Falex-dukhno%2Fpg_wire?ref=badge_large)
